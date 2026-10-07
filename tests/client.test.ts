@@ -198,8 +198,8 @@ describe("gauge mapping", () => {
     expect(needleDegrees(1)).toBe(-90);
     expect(needleDegrees(3)).toBe(0);
     expect(needleDegrees(5)).toBe(90);
-    expect(bandLabel(1.4)).toBe("Proportional");
-    expect(bandLabel(1.45)).toBe("Proportional");
+    expect(bandLabel(1.4)).toBe("Proportionate");
+    expect(bandLabel(1.45)).toBe("Proportionate");
     expect(bandLabel(4.5)).toBe("Hyperbolic");
   });
 });

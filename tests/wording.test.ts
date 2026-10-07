@@ -1,4 +1,5 @@
-// The scale was renamed on 2026-10-07. The old end labels must not appear in
+// The scale was renamed on 2026-10-07. The old end labels, and this meter's retired
+// first label, must not appear in
 // anything a viewer sees or the model reads.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -7,7 +8,8 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(import.meta.dirname, "..");
 const SCANNED = ["index.html", "src", "server", "public", "functions"];
-const BANNED = /hysteric|practical/i;
+// "Proportional" was this meter's first label; Max chose LITMUS's "Proportionate" (2026-10-07).
+const BANNED = /hysteric|practical|proportional/i;
 
 function files(path: string): string[] {
   const full = join(ROOT, path);

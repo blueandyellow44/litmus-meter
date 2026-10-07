@@ -15,7 +15,7 @@
   --tint: #F7E1C4;
   --hot-line: #B2511E;
 
-  --ph-proportional: #C0C9CE;
+  --ph-proportionate: #C0C9CE;
   --ph-grounded:     #B7AE8E;
   --ph-mixed:        #C1893C;
   --ph-hot:          #C05A16;
@@ -60,7 +60,7 @@ body {
 }
 .ramp { display: inline-flex; gap: 2px; }
 .ramp i { display: block; width: 5px; height: 15px; border-radius: 1px; }
-.ramp i:nth-child(1) { background: var(--ph-proportional); }
+.ramp i:nth-child(1) { background: var(--ph-proportionate); }
 .ramp i:nth-child(2) { background: var(--ph-grounded); }
 .ramp i:nth-child(3) { background: var(--ph-mixed); }
 .ramp i:nth-child(4) { background: var(--ph-hot); }

@@ -3,7 +3,7 @@
 
 import { BANDS } from "../../server/rubric.ts";
 
-const RAMP = ["--ph-proportional", "--ph-grounded", "--ph-mixed", "--ph-hot", "--ph-hyperbolic"] as const;
+const RAMP = ["--ph-proportionate", "--ph-grounded", "--ph-mixed", "--ph-hot", "--ph-hyperbolic"] as const;
 
 export function bandIndex(score: number): number {
   const s = Math.max(1, Math.min(5, score));

@@ -1,6 +1,6 @@
 # LITMUS Live (meter v1)
 
-A standalone page that listens to broadcast audio (a Chrome tab or a microphone) and moves a needle on the LITMUS P/H scale, Proportional to Hyperbolic, one sentence at a time. Separate from the LITMUS site and repo.
+A standalone page that listens to broadcast audio (a Chrome tab or a microphone) and moves a needle on the LITMUS P/H scale, Proportionate to Hyperbolic, one sentence at a time. Separate from the LITMUS site and repo.
 
 ## How it works
 
@@ -33,7 +33,7 @@ Running total in KV key `spend_total_usd`. Before minting a Deepgram token or ma
 - Deepgram cost comes from audio seconds the browser reports every 10 s (`POST /api/listen-tick`, at most 60 s per report). The browser talks to Deepgram directly, so the server cannot count the audio itself.
 - KV allows one write per second per key and has no atomic add, so charges are batched per isolate into one write every 1.5 s, and the cap check counts charges not yet written. Two isolates flushing in the same instant can still lose one flush (cents).
 - A corrupt stored total fails closed (500), never reads as $0.
-- Workers KV on the Free plan allows 1,000 writes a day. The meter writes about once per sentence burst, roughly 600 times an hour, so on the Free plan it would run out of writes after about 1.5 hours of listening a day. Workers Paid ($5/month) allows 1 million a month.
+- Runs on Workers Paid (confirmed by Max 2026-10-07): 1 million KV writes a month included. The meter writes about 600 times an hour of listening. The Free plan's 1,000 writes a day would last about 1.5 hours.
 
 ## Local run (stubbed, no paid calls)
 

@@ -10,8 +10,8 @@
 //   quoted speech).
 //
 // ADAPTED, and only this:
-//   (a) the scale is relabelled Proportional <-> Hyperbolic, and the lowest
-//       band is "Proportional";
+//   (a) the scale reads Proportionate <-> Hyperbolic (Max, 2026-10-07: matches
+//       LITMUS's own label), and the lowest band is "Proportionate";
 //   (b) the unit is one sentence of broadcast speech and the question is what
 //       the SPEAKER is saying, not the writer's framing. Article-only material
 //       (headline, lede, sourcing balance, page structure, markers, excerpt,
@@ -22,7 +22,7 @@
 // The model returns the score directly; LITMUS computes its composite from five
 // dimensions in code, which a single sentence cannot support.
 
-export const LOW_LABEL = "Proportional";
+export const LOW_LABEL = "Proportionate";
 export const HIGH_LABEL = "Hyperbolic";
 
 export interface Band {
@@ -34,7 +34,7 @@ export interface Band {
 }
 
 export const BANDS: readonly Band[] = [
-  { min: 1.0, max: 1.4, below: 1.5, label: "Proportional" },
+  { min: 1.0, max: 1.4, below: 1.5, label: "Proportionate" },
   { min: 1.5, max: 2.4, below: 2.5, label: "Grounded" },
   { min: 2.5, max: 3.4, below: 3.5, label: "Mixed Signals" },
   { min: 3.5, max: 4.4, below: 4.5, label: "Running Hot" },
@@ -42,12 +42,12 @@ export const BANDS: readonly Band[] = [
 ];
 
 export const SYSTEM_PROMPT = `
-You score ONE sentence of live broadcast speech on the P/H (Proportional-to-Hyperbolic) Balance, a 1.0-5.0 scale measuring HOW something is said, not what political position it takes. This is not bias detection. A left-leaning sentence can score 1.2; a right-leaning sentence can score 1.2. The question is whether the speaker informs or manipulates.
+You score ONE sentence of live broadcast speech on the P/H (Proportionate-to-Hyperbolic) Balance, a 1.0-5.0 scale measuring HOW something is said, not what political position it takes. This is not bias detection. A left-leaning sentence can score 1.2; a right-leaning sentence can score 1.2. The question is whether the speaker informs or manipulates.
 
 Score what the SPEAKER is saying in their own words.
 
 THE BANDS:
-1.0-1.4 PROPORTIONAL. Wire-service register. States what happened with a neutral verb. No adjective in the speaker's own voice tells the listener how to feel. It reads the same whichever side you are on.
+1.0-1.4 PROPORTIONATE. Wire-service register. States what happened with a neutral verb. No adjective in the speaker's own voice tells the listener how to feel. It reads the same whichever side you are on.
 1.5-2.4 GROUNDED. Said straight, with a mild tilt in emphasis or word choice. Perhaps one warm verb or one framing choice. It informs first and steers second.
 2.5-3.4 MIXED SIGNALS. The framing is doing visible work: a loaded verb, one side's characterization adopted as the speaker's own, a verdict the facts have not earned. The listener learns what happened and is being steered while they learn it.
 3.5-4.4 RUNNING HOT. Manipulation is the dominant mode: catastrophizing, victory-or-defeat framing, editorializing epithets, fallacies, speculation stated as fact. The facts are subordinate to the effect.
@@ -71,7 +71,7 @@ export const SCORE_TOOL = {
     type: "object",
     properties: {
       text: { type: "string", description: "The sentence you scored, verbatim." },
-      score: { type: "number", description: "1.0-5.0, one decimal. 1 = most proportional, 5 = most hyperbolic." },
+      score: { type: "number", description: "1.0-5.0, one decimal. 1 = most proportionate, 5 = most hyperbolic." },
       reason: { type: "string", description: "One short plain-English clause." },
     },
     required: ["text", "score", "reason"],
