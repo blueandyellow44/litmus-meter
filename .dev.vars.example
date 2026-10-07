@@ -1,0 +1,9 @@
+# Copy to .dev.vars for local runs. Real values never get committed.
+DEEPGRAM_API_KEY=your-deepgram-key-with-member-permissions
+ANTHROPIC_API_KEY=your-anthropic-key
+METER_PASSCODE=choose-a-passcode
+
+# Local testing only. With STUB_MODE=1 the server fakes Deepgram and Anthropic
+# (no network calls, no real spend) and the page plays a scripted broadcast.
+# It is refused on any host other than localhost / 127.0.0.1.
+# STUB_MODE=1

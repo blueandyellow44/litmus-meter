@@ -1,0 +1,9 @@
+name = "litmus-meter"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-01"
+
+# Holds one key, spend_total_usd. The id below is a placeholder for local runs;
+# scripts/create-project.sh replaces it with the real namespace id.
+[[kv_namespaces]]
+binding = "METER_KV"
+id = "00000000000000000000000000000000"
