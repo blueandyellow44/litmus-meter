@@ -32,7 +32,11 @@ export async function getMicStream(): Promise<MediaStream> {
     throw new CaptureError("This browser cannot use the microphone here. The page must be served over https.");
   }
   try {
-    return await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Voice-call filters treat a TV across the room as noise to remove
+    // (Max's live test, 2026-10-07); keep the gain control, drop the filters.
+    return await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+    });
   } catch {
     throw new CaptureError("Microphone access was refused.");
   }

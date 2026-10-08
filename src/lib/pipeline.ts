@@ -8,7 +8,7 @@ import { MeterStore } from "./meterStore.ts";
 import { SentenceAssembler } from "./sentences.ts";
 
 export type ScoreResult =
-  | { kind: "scored"; score: number; reason: string; costUsd: number; warn: boolean }
+  | { kind: "scored"; score: number; reason: string; claim: boolean; text: string; costUsd: number; warn: boolean }
   | { kind: "dropped"; costUsd: number; warn: boolean }
   | { kind: "budget" };
 
@@ -33,6 +33,7 @@ export class Pipeline {
   readonly store = new MeterStore();
   private readonly assembler = new SentenceAssembler();
   private stopped = false;
+  private inFlight = new Set<Promise<void>>();
 
   constructor(
     private readonly score: ScoreFn,
@@ -42,6 +43,14 @@ export class Pipeline {
 
   stop(): void {
     this.stopped = true;
+  }
+
+  // Stop listening for new speech but release what the speaker already said,
+  // then wait for every score in flight. The synopsis runs after this.
+  async finish(): Promise<void> {
+    this.dispatch(this.assembler.flush());
+    this.stopped = true;
+    while (this.inFlight.size > 0) await Promise.allSettled([...this.inFlight]);
   }
 
   handleMessage(raw: unknown): void {
@@ -67,7 +76,8 @@ export class Pipeline {
     const finalAt = this.now();
     for (const text of sentences) {
       const entry = this.store.add(text, finalAt);
-      void this.scoreOne(entry.seq, text);
+      const p = this.scoreOne(entry.seq, text).finally(() => this.inFlight.delete(p));
+      this.inFlight.add(p);
     }
   }
 
@@ -93,7 +103,7 @@ export class Pipeline {
       this.store.drop(seq);
       return;
     }
-    this.store.resolve(seq, result.score, result.reason);
+    this.store.resolve(seq, result.score, result.reason, result.claim, result.text);
     this.hooks.changed(seq);
   }
 }

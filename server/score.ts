@@ -17,8 +17,47 @@ export type CallAnthropic = (body: unknown) => Promise<AnthropicResponse>;
 
 export interface ValidScore {
   text: string;
+  claim: boolean;
   score: number;
   reason: string;
+}
+
+// At most this many words may differ between what was heard and what the
+// model returns, and every word it adds must be capitalized (a proper noun).
+const MAX_CORRECTED_WORDS = 3;
+
+function words(s: string): string[] {
+  return s.trim().split(/\s+/).filter(Boolean);
+}
+
+function bare(w: string): string {
+  return w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "").toLowerCase();
+}
+
+// Returns the model's version only when it differs from the heard sentence by
+// a proper-noun swap; otherwise the heard sentence. A rewrite never reaches
+// the screen as if the speaker had said it.
+export function acceptCorrection(heard: string, proposed: string): string {
+  if (proposed === heard) return heard;
+  const a = words(heard);
+  const b = words(proposed);
+  // Longest common subsequence on bare words gives the unchanged backbone.
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      dp[i]![j] = bare(a[i]!) === bare(b[j]!) ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+  const kept = dp[0]![0]!;
+  const removed = a.length - kept;
+  const added: string[] = [];
+  for (let i = 0, j = 0; j < b.length; ) {
+    if (i < a.length && bare(a[i]!) === bare(b[j]!)) { i++; j++; }
+    else if (i < a.length && dp[i + 1]![j]! >= dp[i]![j + 1]!) i++;
+    else { added.push(b[j]!); j++; }
+  }
+  if (added.length === 0 && removed === 0) return heard; // punctuation or case only
+  if (removed > MAX_CORRECTED_WORDS || added.length > MAX_CORRECTED_WORDS) return heard;
+  if (!added.every((w) => /^[^\p{L}]*\p{Lu}/u.test(w))) return heard;
+  return proposed.trim();
 }
 
 export function buildRequest(sentence: string) {
@@ -57,13 +96,15 @@ export function validateToolOutput(response: AnthropicResponse): ValidScore | nu
   const block = response.content?.find((c) => c.type === "tool_use" && c.name === SCORE_TOOL.name);
   const input = block?.input;
   if (!input || typeof input !== "object") return null;
-  const { text, score, reason } = input as Record<string, unknown>;
+  const { text, claim, score, reason } = input as Record<string, unknown>;
   if (typeof text !== "string" || text.trim() === "") return null;
+  if (typeof claim !== "boolean") return null;
   if (typeof reason !== "string" || reason.trim() === "") return null;
   if (typeof score !== "number" || !Number.isFinite(score)) return null;
   if (score < 1.0 || score > 5.0) return null;
   return {
     text: text.trim(),
+    claim,
     score: Math.round(score * 10) / 10,
     reason: reason.trim().slice(0, MAX_REASON_CHARS),
   };

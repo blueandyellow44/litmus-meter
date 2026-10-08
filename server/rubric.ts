@@ -18,7 +18,11 @@
 //       lean, section, content type) is dropped because one sentence has none
 //       of it;
 //   (c) the quote silo is kept, restated for speech: words the speaker
-//       attributes to someone else are not the speaker's own framing.
+//       attributes to someone else are not the speaker's own framing;
+//   (d) after Max's first live test (2026-10-07): a claim flag, so greetings
+//       and broken fragments are not scored as 1.0 and do not drag the needle,
+//       and permission to fix a misheard proper noun ("Strait of Hormones"),
+//       which server/score.ts accepts only within a narrow guard.
 // The model returns the score directly; LITMUS computes its composite from five
 // dimensions in code, which a single sentence cannot support.
 
@@ -59,7 +63,8 @@ RULES:
 - Describing is not editorializing. An accurate, checkable characterization of something that happened is reporting.
 - A sourced superlative is a fact ("the largest single-day fall since 2008").
 - QUOTED SPEECH IS SILOED. When the speaker reports someone else's words ("quote", "he said", "in her words", quotation marks), those words are not the speaker's framing. Remove them, then score only what remains: the speaker's own verbs, adjectives, and characterization around the quote. Reporting that a senator called a bill "a catastrophe" is a plain attribution.
-- A greeting, filler, or fragment with no claim scores 1.0.
+- CLAIM. Set claim false when the sentence makes no claim and no characterization: a greeting, filler, a sign-off, or a fragment too broken to say anything ("My dad is...", "Other strong call, consolidate."). A claim-false line is shown to the listener as not scored and never moves the needle, so do not use it to dodge a hard call: anything that asserts or characterizes is claim true.
+- TRANSCRIPT ERRORS. The sentence comes from live speech recognition. In "text", return the sentence verbatim, except fix an obvious mishearing of a proper noun (a place, person, group, or law), such as "Strait of Hormones" for "Strait of Hormuz". Change nothing else: no grammar, no other words, no punctuation. Score the corrected sentence.
 
 Call report_score once. reason: one short plain-English clause naming the words that set the score. No em dashes.
 `.trim();
@@ -70,10 +75,36 @@ export const SCORE_TOOL = {
   input_schema: {
     type: "object",
     properties: {
-      text: { type: "string", description: "The sentence you scored, verbatim." },
+      text: { type: "string", description: "The sentence verbatim, with only a misheard proper noun corrected." },
+      claim: { type: "boolean", description: "False only for greetings, filler, sign-offs and fragments that assert nothing." },
       score: { type: "number", description: "1.0-5.0, one decimal. 1 = most proportionate, 5 = most hyperbolic." },
       reason: { type: "string", description: "One short plain-English clause." },
     },
-    required: ["text", "score", "reason"],
+    required: ["text", "claim", "score", "reason"],
+  },
+} as const;
+
+// The end-of-listen synopsis. The band and the number are computed in code
+// (the plain average of the claim lines, Max 2026-10-07); the model writes only
+// the one-sentence Why, the way the LITMUS site's "Why this score" works.
+export const SYNOPSIS_PROMPT = `
+You write the one-sentence "Why" for a finished listen on the P/H (Proportionate-to-Hyperbolic) Balance. The band and the score are already decided; do not change or argue with them.
+
+You get the band, the score, and the scored lines. Say WHY the listen earned its band by naming the speaker's own words that set it. Quote at least one phrase of three or more words exactly as it appears in one of the lines. If the band is Proportionate or Grounded, say what kept it level; if it is higher, say what pushed it up.
+
+The listener decides for themselves. State what the words did; never tell the listener what to think of the speaker.
+
+One sentence, plain words, under 35 words. No em dashes. No contractions. Do not summarize the news.
+
+Call report_why once.
+`.trim();
+
+export const WHY_TOOL = {
+  name: "report_why",
+  description: "Report the one-sentence Why.",
+  input_schema: {
+    type: "object",
+    properties: { why: { type: "string", description: "One sentence quoting at least one three-word phrase from the lines." } },
+    required: ["why"],
   },
 } as const;

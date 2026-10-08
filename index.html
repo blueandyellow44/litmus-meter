@@ -42,6 +42,22 @@
         <p id="hint" class="hint" hidden>Pick the tab in the dialog and tick &ldquo;Share tab audio&rdquo;.</p>
         <p id="error" class="error" role="alert" hidden></p>
 
+        <section id="synopsis" class="synopsis" aria-live="polite" hidden>
+          <h2 class="label">What you just listened to</h2>
+          <p id="syn-verdict" class="verdict"></p>
+          <p id="syn-why" class="why"></p>
+          <p id="syn-counts" class="counts"></p>
+          <h3 class="label">The hottest lines</h3>
+          <ol id="syn-hot" class="proof"></ol>
+          <h3 class="label">The calmest lines</h3>
+          <ol id="syn-calm" class="proof"></ol>
+        </section>
+
+        <aside class="hottest">
+          <h2 class="label">Hottest line so far</h2>
+          <div id="hottest" class="row empty"><p class="sentence">Nothing scored yet.</p></div>
+        </aside>
+
         <div class="now">
           <h2 class="label">Speaker now</h2>
           <p id="interim" class="interim" aria-live="off">&nbsp;</p>
@@ -66,11 +82,6 @@
           <h2 class="label">Needle is showing</h2>
           <p id="showing" class="sentence">&nbsp;</p>
         </div>
-
-        <aside class="hottest">
-          <h2 class="label">Hottest line so far</h2>
-          <div id="hottest" class="row empty"><p class="sentence">Nothing scored yet.</p></div>
-        </aside>
 
         <ol id="list" class="list" aria-label="Scored sentences, newest first"></ol>
 

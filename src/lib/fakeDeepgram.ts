@@ -6,6 +6,9 @@ import type { TranscriptSocket } from "./deepgramSocket.ts";
 
 // Each entry is one Deepgram final segment. Some end mid-sentence, one holds
 // two sentences, and `pause` marks where the speaker stops (speech_final).
+// The gaps are shorter than utterance_end_ms, so as with real Deepgram no
+// UtteranceEnd arrives between them; "My dad is." therefore waits and joins
+// the next line. One UtteranceEnd closes the broadcast.
 const SCRIPT: Array<{ text: string; pause: boolean }> = [
   { text: "Good evening, I'm reporting from the Capitol.", pause: true },
   { text: "The Senate passed the spending bill tonight by a vote of 52 to 48.", pause: true },
@@ -16,6 +19,8 @@ const SCRIPT: Array<{ text: string; pause: boolean }> = [
   { text: "Let's be honest, this is the worst betrayal of voters we have ever seen. It is a disgrace.", pause: true },
   { text: "The House is expected to take up the measure on Thursday.", pause: true },
   { text: "Markets closed slightly higher, with the Dow up 0.4 percent.", pause: true },
+  { text: "My dad is.", pause: true },
+  { text: "We will take over the Strait of Hormones.", pause: true },
   { text: "This radical agenda is pure chaos and it will never work.", pause: true },
   { text: "Officials said the relief money will reach the Gulf Coast within thirty days.", pause: true },
   { text: "Back to you in the studio.", pause: true },
@@ -49,9 +54,9 @@ export function openFakeDeepgram(onMessage: (msg: unknown) => void, onDone: () =
     }
     t += FINAL_AFTER_MS;
     at(t, () => onMessage(results(seg.text, true, seg.pause)));
-    if (seg.pause) at(t + 1000, () => onMessage({ type: "UtteranceEnd" }));
     t += seg.pause ? GAP_MS : 0;
   }
+  at(t + 1000, () => onMessage({ type: "UtteranceEnd" }));
   at(t + 2500, onDone);
 
   return {

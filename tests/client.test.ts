@@ -31,7 +31,7 @@ function harness() {
   return { p, calls, interims, changed };
 }
 
-const scored = (score: number, reason = "r"): ScoreResult => ({ kind: "scored", score, reason, costUsd: 0.002, warn: false });
+const scored = (score: number, reason = "r", claim = true, text = ""): ScoreResult => ({ kind: "scored", score, reason, claim, text, costUsd: 0.002, warn: false });
 
 describe("one scoring call per final sentence, none for interims", () => {
   it("interims update the live line and never score", () => {
@@ -45,8 +45,8 @@ describe("one scoring call per final sentence, none for interims", () => {
 
   it("scores each sentence in a final the moment it arrives, in parallel", () => {
     const h = harness();
-    h.p.handleMessage(final("The Senate passed the bill. It now goes to the House."));
-    expect(h.calls.map((c) => c.text)).toEqual(["The Senate passed the bill.", "It now goes to the House."]);
+    h.p.handleMessage(final("The Senate passed the bill tonight. It now goes to the House."));
+    expect(h.calls.map((c) => c.text)).toEqual(["The Senate passed the bill tonight.", "It now goes to the House."]);
     // Both requests are in flight together; nothing waited on the first.
   });
 
@@ -62,14 +62,14 @@ describe("one scoring call per final sentence, none for interims", () => {
 
   it("an unpunctuated tail is scored when the speaker pauses (speech_final or UtteranceEnd), and only once", () => {
     const h = harness();
-    h.p.handleMessage(final("back to you in the studio", true));
-    expect(h.calls.map((c) => c.text)).toEqual(["back to you in the studio"]);
+    h.p.handleMessage(final("now back to you in the studio", true));
+    expect(h.calls.map((c) => c.text)).toEqual(["now back to you in the studio"]);
     h.p.handleMessage({ type: "UtteranceEnd" });
     expect(h.calls).toHaveLength(1);
 
     h.p.handleMessage(final("and that is the news"));
     h.p.handleMessage({ type: "UtteranceEnd" });
-    expect(h.calls.map((c) => c.text)).toEqual(["back to you in the studio", "and that is the news"]);
+    expect(h.calls.map((c) => c.text)).toEqual(["now back to you in the studio", "and that is the news"]);
   });
 
   it("stop ends scoring of anything that arrives later", () => {
@@ -83,7 +83,7 @@ describe("one scoring call per final sentence, none for interims", () => {
 describe("out-of-order responses", () => {
   it("places each score by sentence order, not arrival order", async () => {
     const h = harness();
-    h.p.handleMessage(final("First. Second. Third."));
+    h.p.handleMessage(final("The first one is here. The second one is here. The third one is here."));
     expect(h.calls).toHaveLength(3);
     h.calls[2]!.d.resolve(scored(4.0, "third"));
     await tick();
@@ -91,15 +91,15 @@ describe("out-of-order responses", () => {
     await tick();
     h.calls[1]!.d.resolve(scored(2.0, "second"));
     await tick();
-    expect(h.p.store.scored().map((e) => e.text)).toEqual(["Third.", "Second.", "First."]);
+    expect(h.p.store.scored().map((e) => e.text)).toEqual(["The third one is here.", "The second one is here.", "The first one is here."]);
     // Needle = the two latest-SPOKEN sentences (Third, Second), not the last two to arrive.
     expect(h.p.store.needle()).toBeCloseTo(3.0);
-    expect(h.p.store.needleSentence()?.text).toBe("Third.");
+    expect(h.p.store.needleSentence()?.text).toBe("The third one is here.");
   });
 
   it("a late answer for an earlier sentence does not move the needle off the latest pair", async () => {
     const h = harness();
-    h.p.handleMessage(final("Alpha. Beta. Gamma."));
+    h.p.handleMessage(final("Alpha said something right here. Beta said something right here. Gamma said something right here."));
     h.calls[1]!.d.resolve(scored(2.0));
     h.calls[2]!.d.resolve(scored(3.0));
     await tick();
@@ -107,16 +107,16 @@ describe("out-of-order responses", () => {
     h.calls[0]!.d.resolve(scored(5.0));
     await tick();
     expect(h.p.store.needle()).toBeCloseTo(2.5);
-    expect(h.p.store.hottest()?.text).toBe("Alpha.");
+    expect(h.p.store.hottest()?.text).toBe("Alpha said something right here.");
   });
 
   it("a malformed (dropped) sentence never appears and never moves the needle", async () => {
     const h = harness();
-    h.p.handleMessage(final("Good one. Bad one."));
+    h.p.handleMessage(final("This is the good one. This is the bad one."));
     h.calls[0]!.d.resolve(scored(2.0));
     h.calls[1]!.d.resolve({ kind: "dropped", costUsd: 0.002, warn: false });
     await tick();
-    expect(h.p.store.scored().map((e) => e.text)).toEqual(["Good one."]);
+    expect(h.p.store.scored().map((e) => e.text)).toEqual(["This is the good one."]);
     expect(h.p.store.needle()).toBeCloseTo(2.0);
   });
 
@@ -125,15 +125,15 @@ describe("out-of-order responses", () => {
     const p = new Pipeline(
       async (text) => {
         calls.push(text);
-        if (text === "Fails.") throw new Error("offline");
+        if (text === "This one fails to score.") throw new Error("offline");
         return scored(1.5);
       },
       { interim: () => {}, changed: () => {}, cost: () => {}, warn: () => {}, budget: () => {} },
       () => 0,
     );
-    p.handleMessage(final("Fails. Works."));
+    p.handleMessage(final("This one fails to score. This one works just fine."));
     await tick();
-    expect(p.store.scored().map((e) => e.text)).toEqual(["Works."]);
+    expect(p.store.scored().map((e) => e.text)).toEqual(["This one works just fine."]);
   });
 });
 
@@ -187,9 +187,9 @@ describe("sentence splitting", () => {
 
   it("assembler carries the unfinished tail", () => {
     const a = new SentenceAssembler();
-    expect(a.addFinal("One. Two", false)).toEqual(["One."]);
+    expect(a.addFinal("The first one is done. Two", false)).toEqual(["The first one is done."]);
     expect(a.pending).toBe("Two");
-    expect(a.addFinal("three.", false)).toEqual(["Two three."]);
+    expect(a.addFinal("three four five six.", false)).toEqual(["Two three four five six."]);
   });
 });
 
@@ -201,5 +201,68 @@ describe("gauge mapping", () => {
     expect(bandLabel(1.4)).toBe("Proportionate");
     expect(bandLabel(1.45)).toBe("Proportionate");
     expect(bandLabel(4.5)).toBe("Hyperbolic");
+  });
+});
+
+describe("mid-thought detection (live test 2026-10-07)", () => {
+  it("holds a short statement and joins it to what comes next", () => {
+    const a = new SentenceAssembler();
+    expect(a.addFinal("My dad is.", true)).toEqual([]);
+    expect(a.pending).toBe("My dad is.");
+    expect(a.addFinal("He was a great builder in New York.", true)).toEqual(["My dad is. He was a great builder in New York."]);
+  });
+
+  it("a four-word statement stands alone; a short question is complete", () => {
+    const a = new SentenceAssembler();
+    expect(a.addFinal("We knock out their navy.", false)).toEqual(["We knock out their navy."]);
+    expect(a.addFinal("It is a disgrace.", false)).toEqual(["It is a disgrace."]);
+    expect(a.addFinal("Is it over?", false)).toEqual(["Is it over?"]);
+  });
+
+  it("a short tail survives a brief pause but is released by a long silence", () => {
+    const h = harness();
+    h.p.handleMessage(final("Other strong call", true));
+    expect(h.calls).toHaveLength(0);
+    h.p.handleMessage({ type: "UtteranceEnd" });
+    expect(h.calls.map((c) => c.text)).toEqual(["Other strong call"]);
+  });
+
+  it("finish() releases the waiting tail and waits for every score in flight", async () => {
+    const h = harness();
+    h.p.handleMessage(final("The vote is set for Thursday. And then"));
+    const done = h.p.finish();
+    expect(h.calls.map((c) => c.text)).toEqual(["The vote is set for Thursday.", "And then"]);
+    let finished = false;
+    void done.then(() => (finished = true));
+    h.calls[0]!.d.resolve(scored(1.2));
+    await tick();
+    expect(finished).toBe(false);
+    h.calls[1]!.d.resolve(scored(1.0, "r", false));
+    await done;
+    expect(finished).toBe(true);
+  });
+});
+
+describe("no-claim lines", () => {
+  it("are kept for the list but never move the needle or the hottest line", async () => {
+    const h = harness();
+    h.p.handleMessage(final("They are coming for your jobs. Good evening to all of you."));
+    h.calls[0]!.d.resolve(scored(4.0));
+    h.calls[1]!.d.resolve(scored(1.0, "greeting", false));
+    await tick();
+    expect(h.p.store.needle()).toBe(4.0);
+    expect(h.p.store.scored().map((e) => e.seq)).toEqual([0]);
+    expect(h.p.store.get(1)?.status).toBe("noclaim");
+    expect(h.p.store.hottest()?.seq).toBe(0);
+  });
+
+  it("show the corrected proper noun and keep what was heard", async () => {
+    const h = harness();
+    h.p.handleMessage(final("We take over the Strait of Hormones."));
+    h.calls[0]!.d.resolve(scored(3.0, "r", true, "We take over the Strait of Hormuz."));
+    await tick();
+    const e = h.p.store.get(0)!;
+    expect(e.text).toBe("We take over the Strait of Hormuz.");
+    expect(e.heard).toBe("We take over the Strait of Hormones.");
   });
 });

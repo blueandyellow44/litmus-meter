@@ -5,9 +5,10 @@
 import { checkPasscode, hasValidSession, issueSessionCookie } from "./auth.ts";
 import { DEEPGRAM_TOKEN_TTL_SECONDS, grantDeepgramToken, type DeepgramToken } from "./deepgram.ts";
 import { anthropicCostUsd, deepgramCostUsd, DEEPGRAM_USD_PER_MIN, SPEND_CAP_USD, SPEND_WARN_USD } from "./prices.ts";
-import { buildRequest, MAX_SENTENCE_CHARS, realAnthropic, validateToolOutput, type CallAnthropic } from "./score.ts";
+import { acceptCorrection, buildRequest, MAX_SENTENCE_CHARS, realAnthropic, validateToolOutput, type CallAnthropic } from "./score.ts";
 import { ledgerFor, spendState, type SpendLedger, type SpendStore } from "./spend.ts";
 import { isLocalHost, stubAnthropic } from "./stub.ts";
+import { buildWhyRequest, parseLines, readWhy, summarize, whyQuotesALine } from "./synopsis.ts";
 
 export interface Env {
   METER_KV: SpendStore;
@@ -139,8 +140,50 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         deps.log({ event: "malformed_score_dropped", text, output: response.content ?? null });
         return json({ error: "malformed model output", dropped: true, cost_usd: cost, ...after }, 422);
       }
-      // The sentence shown is the one we sent, never the model's echo of it.
-      return json({ text, score: valid.score, reason: valid.reason, cost_usd: cost, ...after });
+      // The sentence shown is the one heard, with at most a proper-noun fix
+      // that passes acceptCorrection; never a free rewrite by the model.
+      const shown = acceptCorrection(text, valid.text);
+      return json({
+        text: shown,
+        heard: text,
+        claim: valid.claim,
+        score: valid.score,
+        reason: valid.reason,
+        cost_usd: cost,
+        ...after,
+      });
+    }
+
+    if (path === "/api/synopsis" && request.method === "POST") {
+      const body = await readJson(request);
+      const summary = summarize(parseLines(body?.lines));
+      if (!summary) return json({ summary: null });
+
+      const before = await deps.ledger.total();
+      // Over budget the numbers still show; only the model-written Why is skipped.
+      if (before >= SPEND_CAP_USD) return json({ summary, why: null, budget: true, ...spendState(before) });
+
+      const proving = [...summary.hottest, ...summary.calmest];
+      let why: string | null = null;
+      let cost = 0;
+      for (const retry of [false, true]) {
+        let response;
+        try {
+          response = await deps.anthropic(buildWhyRequest(summary, retry));
+        } catch (err) {
+          deps.log({ event: "why_call_failed", error: String(err) });
+          break;
+        }
+        cost += anthropicCostUsd(response.usage);
+        const candidate = readWhy(response);
+        if (candidate && whyQuotesALine(candidate, proving)) {
+          why = candidate;
+          break;
+        }
+        deps.log({ event: "why_rejected", retry, candidate });
+      }
+      deps.waitUntil(deps.ledger.charge(cost));
+      return json({ summary, why, cost_usd: cost, ...spendState(before + cost) });
     }
 
     return json({ error: "not found" }, 404);

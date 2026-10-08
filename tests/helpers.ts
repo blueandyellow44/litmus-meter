@@ -19,7 +19,7 @@ export const NOW = 1_800_000_000_000;
 
 export function goodResponse(score = 2.3, reason = "one warm verb"): AnthropicResponse {
   return {
-    content: [{ type: "tool_use", name: "report_score", input: { text: "x", score, reason } }],
+    content: [{ type: "tool_use", name: "report_score", input: { text: "x", claim: true, score, reason } }],
     usage: { input_tokens: 1200, output_tokens: 60 },
   };
 }

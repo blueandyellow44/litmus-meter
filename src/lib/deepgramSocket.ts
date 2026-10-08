@@ -8,9 +8,10 @@ export const DEEPGRAM_PARAMS: Record<string, string> = {
   punctuate: "true",
   smart_format: "true",
   interim_results: "true",
-  // Finalize after 300 ms of silence, so a sentence that ends in a pause is
-  // final well inside the 1 s target.
-  endpointing: "300",
+  // Finalize after 700 ms of silence. 300 ms cut rambling speakers into
+  // fragments mid-thought (Max's live test, 2026-10-07); 700 trades about
+  // 0.4 s of lag for lines that hold a whole thought.
+  endpointing: "700",
   // Backstop for noisy audio where endpointing never fires. 1000 is
   // Deepgram's documented minimum.
   utterance_end_ms: "1000",
@@ -20,8 +21,21 @@ export const DEEPGRAM_PARAMS: Record<string, string> = {
   channels: "1",
 };
 
+// Names news speech recognition tends to mishear ("Strait of Hormones").
+// Nova-3 keyterm prompting: up to 100 terms, 500 tokens per request
+// (https://developers.deepgram.com/docs/keyterm). Add to it as mishearings show up.
+export const KEYTERMS = [
+  "Strait of Hormuz", "Hormuz", "Hezbollah", "Hamas", "Houthis", "Gaza", "Netanyahu", "Zelenskyy",
+  "Kyiv", "Kremlin", "Putin", "Xi Jinping", "Taiwan", "Pyongyang", "Tehran", "Khamenei",
+  "IDF", "NATO", "OPEC", "Pentagon", "Mar-a-Lago", "MAGA", "Schumer", "Jeffries", "Thune",
+  "Vance", "Rubio", "Hegseth", "Medicaid", "Medicare", "tariffs", "filibuster", "reconciliation",
+  "Supreme Court", "ICE", "DOGE", "Fed", "Powell",
+];
+
 export function deepgramUrl(): string {
-  return `wss://api.deepgram.com/v1/listen?${new URLSearchParams(DEEPGRAM_PARAMS)}`;
+  const params = new URLSearchParams(DEEPGRAM_PARAMS);
+  for (const term of KEYTERMS) params.append("keyterm", term);
+  return `wss://api.deepgram.com/v1/listen?${params}`;
 }
 
 export interface TranscriptSocket {

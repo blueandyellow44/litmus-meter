@@ -72,6 +72,7 @@ describe("cookie enforcement on every route", () => {
     ["POST", "/api/deepgram-token"],
     ["POST", "/api/score"],
     ["POST", "/api/listen-tick"],
+    ["POST", "/api/synopsis"],
     ["GET", "/api/anything-else"],
   ];
 
@@ -243,7 +244,7 @@ describe("scoring route", () => {
   });
 
   it("validates and rounds a good tool call to one decimal", () => {
-    expect(validateToolOutput(goodResponse(3.46, "loaded verb"))).toEqual({ text: "x", score: 3.5, reason: "loaded verb" });
+    expect(validateToolOutput(goodResponse(3.46, "loaded verb"))).toEqual({ text: "x", claim: true, score: 3.5, reason: "loaded verb" });
     expect(validateToolOutput(goodResponse(1.0))).not.toBeNull();
     expect(validateToolOutput(goodResponse(5.0))).not.toBeNull();
     expect(validateToolOutput(goodResponse(0.9))).toBeNull();

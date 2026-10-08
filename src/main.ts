@@ -28,6 +28,12 @@ const el = {
   gaugeValue: $("gauge-value"),
   showing: $("showing"),
   hottest: $("hottest"),
+  synopsis: $("synopsis"),
+  synVerdict: $("syn-verdict"),
+  synWhy: $("syn-why"),
+  synCounts: $("syn-counts"),
+  synHot: $<HTMLOListElement>("syn-hot"),
+  synCalm: $<HTMLOListElement>("syn-calm"),
   list: $<HTMLOListElement>("list"),
   minutes: $("minutes"),
   cost: $("cost"),
@@ -55,22 +61,27 @@ function setText(node: HTMLElement, text: string): void {
   node.textContent = text || " ";
 }
 
-function rowHtml(e: Entry): HTMLElement {
+function rowHtml(e: { seq: number; text: string; heard?: string; score?: number; reason?: string; lagMs?: number; status?: string }): HTMLElement {
+  const scored = e.status !== "noclaim" && e.score !== undefined;
   const frag = document.createElement("div");
-  frag.className = "row";
+  frag.className = scored ? "row" : "row noclaim";
   const dot = document.createElement("span");
   dot.className = "dot";
-  dot.style.background = bandColor(e.score!);
-  dot.title = bandLabel(e.score!);
+  if (scored) {
+    dot.style.background = bandColor(e.score!);
+    dot.title = bandLabel(e.score!);
+  }
   const score = document.createElement("span");
   score.className = "score";
-  score.textContent = e.score!.toFixed(1);
+  score.textContent = scored ? e.score!.toFixed(1) : "\u2013";
   const sentence = document.createElement("p");
   sentence.className = "sentence";
   sentence.textContent = e.text;
+  // A corrected proper noun is shown; what was actually heard stays one hover away.
+  if (e.heard && e.heard !== e.text) sentence.title = `Heard as: ${e.heard}`;
   const reason = document.createElement("p");
   reason.className = "reason";
-  reason.textContent = e.reason ?? "";
+  reason.textContent = scored ? (e.reason ?? "") : "Not scored: no claim to judge.";
   const lag = document.createElement("span");
   lag.className = "lag";
   lag.dataset.seq = String(e.seq);
@@ -115,7 +126,8 @@ function renderAfterScore(pipeline: Pipeline, seq: number | null): void {
   }
 
   if (seq !== null) {
-    const entry = store.scored().find((e) => e.seq === seq);
+    const found = store.get(seq);
+    const entry = found && (found.status === "scored" || found.status === "noclaim") ? found : null;
     if (entry && !listItems.has(seq)) insertListItem(entry);
     // Lag ends when the DOM carries the score. The paint follows on the next
     // frame (~16 ms) while the page is visible. requestAnimationFrame is not
@@ -136,6 +148,70 @@ function renderAfterScore(pipeline: Pipeline, seq: number | null): void {
 el.debug.addEventListener("change", () => {
   document.querySelectorAll<HTMLElement>(".lag").forEach((n) => (n.hidden = !el.debug.checked));
 });
+
+// Every Listen starts from a clean slate, so one broadcast never mixes into
+// the next (Max's live test, 2026-10-07, Deadwood then a speech). This also
+// clears listItems, whose keys restart at 0 with each new pipeline.
+function resetDisplay(): void {
+  el.list.replaceChildren();
+  listItems.clear();
+  el.hottest.className = "row empty";
+  el.hottest.innerHTML = '<p class="sentence">Nothing scored yet.</p>';
+  setText(el.showing, "");
+  setText(el.interim, "");
+  el.needle.classList.add("idle");
+  el.needle.style.transform = "";
+  el.gaugeValue.textContent = "Waiting for the first sentence";
+  el.synopsis.hidden = true;
+  (window as unknown as { __meterLags: number[] }).__meterLags = [];
+}
+
+// ── end-of-listen synopsis ───────────────────────────────────────────────────
+function proofItem(l: api.SynopsisLine): HTMLLIElement {
+  const li = document.createElement("li");
+  li.append(rowHtml({ ...l, status: "scored" }));
+  return li;
+}
+
+async function showSynopsis(pipeline: Pipeline): Promise<void> {
+  el.synopsis.hidden = false;
+  el.synVerdict.textContent = "Adding it up\u2026";
+  el.synWhy.textContent = "";
+  el.synCounts.textContent = "";
+  el.synHot.replaceChildren();
+  el.synCalm.replaceChildren();
+  await pipeline.finish();
+  const lines = pipeline.store
+    .scored()
+    .reverse()
+    .map((e) => ({ seq: e.seq, text: e.text, score: e.score!, reason: e.reason ?? "" }));
+  let result: api.Synopsis;
+  try {
+    result = await api.synopsis(lines);
+  } catch (err) {
+    el.synVerdict.textContent = "The summary could not be made.";
+    console.warn(err);
+    return;
+  }
+  const s = result.summary;
+  if (!s) {
+    el.synVerdict.textContent = "Not enough was said to judge.";
+    el.synWhy.textContent = `Fewer than three lines made a claim.`;
+    return;
+  }
+  el.synVerdict.textContent = `${s.band}, ${s.score.toFixed(1)}`;
+  // Retry-then-none, as on the site: no Why line beats a Why that cites nothing.
+  el.synWhy.textContent = result.why ?? "";
+  el.synWhy.hidden = !result.why;
+  const counts = Object.entries(s.counts)
+    .filter(([, n]) => n > 0)
+    .map(([band, n]) => `${n} ${band}`)
+    .join(", ");
+  el.synCounts.textContent = `The average of ${s.lines} lines that made a claim: ${counts}.`;
+  el.synHot.replaceChildren(...s.hottest.map(proofItem));
+  el.synCalm.replaceChildren(...s.calmest.map(proofItem));
+  el.synopsis.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 // ── messages ─────────────────────────────────────────────────────────────────
 function showError(msg: string | null): void {
@@ -200,7 +276,6 @@ function stopSession(): void {
   const r = running;
   if (!r) return;
   running = null;
-  r.pipeline.stop();
   r.socket?.close();
   r.capture?.stop();
   r.timers.forEach(clearInterval);
@@ -210,18 +285,22 @@ function stopSession(): void {
   el.btnMic.hidden = false;
   el.hint.hidden = true;
   setText(el.interim, "");
+  void showSynopsis(r.pipeline);
 }
 
 async function startSession(source: "tab" | "mic"): Promise<void> {
   if (running || budgetReached) return;
   showError(null);
+  resetDisplay();
   // Created inside the click so mobile Safari allows audio to run.
   const ctx = session?.stub ? null : new AudioContext();
   const pipeline = new Pipeline(api.scoreSentence, {
     interim: (t) => setText(el.interim, t),
     changed: (seq) => renderAfterScore(pipeline, seq),
+    // Charged to this listen even when the answer lands after Stop.
     cost: (usd) => {
-      if (running) running.sessionCost += usd;
+      r.sessionCost += usd;
+      updateReadout(r);
     },
     warn: showWarn,
     budget: () => {

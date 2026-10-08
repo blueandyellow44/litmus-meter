@@ -160,7 +160,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .sentence { margin: 0; font-family: var(--serif); font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
 
 .hottest {
-  margin-top: 20px;
+  margin-top: 16px;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 8px;
@@ -193,3 +193,20 @@ button:disabled { opacity: 0.45; cursor: default; }
   .interim { font-size: 22px; }
   .sentence { font-size: 20px; }
 }
+
+.row.noclaim .dot { background: transparent; }
+.row.noclaim .score, .row.noclaim .sentence, .row.noclaim .reason { color: var(--ink3); }
+
+.synopsis {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.synopsis .verdict { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+.synopsis .why { margin: 0 0 8px; font-family: var(--serif); font-size: 18px; line-height: 1.4; }
+.synopsis .counts { margin: 0 0 12px; font-size: 14px; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.synopsis h3.label { margin-top: 12px; }
+.proof { list-style: none; margin: 0; padding: 0; }
+.proof li { padding: 8px 0; border-top: 1px solid var(--rule); }

@@ -58,10 +58,37 @@ export async function scoreSentence(text: string): Promise<ScoreResult> {
       kind: "scored",
       score: Number(body.score),
       reason: String(body.reason),
+      claim: body.claim !== false,
+      text: typeof body.text === "string" && body.text ? body.text : text,
       costUsd: Number(body.cost_usd) || 0,
       warn: body.warn === true,
     };
   }
   // 422 malformed model output, 502 scorer down: the sentence is dropped.
   return { kind: "dropped", costUsd: Number(body.cost_usd) || 0, warn: body.warn === true };
+}
+
+export interface SynopsisLine {
+  seq: number;
+  text: string;
+  score: number;
+  reason: string;
+}
+
+export interface Synopsis {
+  summary: {
+    lines: number;
+    score: number;
+    band: string;
+    counts: Record<string, number>;
+    hottest: SynopsisLine[];
+    calmest: SynopsisLine[];
+  } | null;
+  why: string | null;
+}
+
+export async function synopsis(lines: SynopsisLine[]): Promise<Synopsis> {
+  const res = await post("/api/synopsis", { lines });
+  if (!res.ok) throw new Error(`synopsis failed (${res.status})`);
+  return res.json();
 }
