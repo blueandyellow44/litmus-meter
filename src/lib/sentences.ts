@@ -3,9 +3,8 @@
 // A final segment can hold one sentence, several, or the first half of one.
 // Each complete sentence is released the moment the final that ends it
 // arrives; the unfinished tail waits for the next final. When Deepgram says
-// the speaker paused (speech_final or UtteranceEnd) the tail is released as a
-// sentence even without closing punctuation, unless it is too short to stand
-// alone (see MIN_SENTENCE_WORDS). Interim text never comes here.
+// a long silence follows (UtteranceEnd) the tail is released as a sentence
+// even without closing punctuation. Interim text never comes here.
 
 const ABBREVIATIONS = new Set([
   "mr", "mrs", "ms", "dr", "st", "jr", "sr", "vs", "gov", "sen", "rep", "gen",
@@ -54,11 +53,15 @@ function isShortStatement(s: string): boolean {
   return wordCount(s) < MIN_SENTENCE_WORDS && !/[?!]["')\]]*$/.test(s.trim());
 }
 
+// A speaker who never pauses long and never gets a period would otherwise
+// leave the needle waiting; past this many words the tail is scored anyway.
+export const MAX_TAIL_WORDS = 40;
+
 export class SentenceAssembler {
   private tail = "";
 
   // Feed the text of one is_final result. Returns every sentence it completed.
-  addFinal(text: string, speechFinal: boolean): string[] {
+  addFinal(text: string): string[] {
     const joined = [this.tail, text.trim()].filter(Boolean).join(" ");
     const { complete, rest } = splitSentences(joined);
     const out: string[] = [];
@@ -72,9 +75,12 @@ export class SentenceAssembler {
       }
     }
     this.tail = [held, rest].filter(Boolean).join(" ");
-    // A short pause (speech_final) releases the tail only when it is long
-    // enough to stand on its own; a longer silence (UtteranceEnd) releases all.
-    if (speechFinal && this.tail && !isShortStatement(this.tail)) out.push(...this.flush());
+    // A short pause (speech_final) is not the end of a thought: a rally
+    // speaker pauses mid-sentence ("Do you know there's a line" / "that's like
+    // three, four miles long", 2026-10-07). The tail waits for Deepgram's own
+    // closing punctuation, which splitSentences acts on, or for a longer
+    // silence (UtteranceEnd), which releases everything.
+    if (wordCount(this.tail) >= MAX_TAIL_WORDS) out.push(...this.flush());
     return out;
   }
 

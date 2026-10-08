@@ -68,7 +68,7 @@ export class Pipeline {
       this.hooks.interim([this.assembler.pending, transcript].filter(Boolean).join(" "));
       return;
     }
-    this.dispatch(this.assembler.addFinal(transcript, r.speech_final === true));
+    this.dispatch(this.assembler.addFinal(transcript));
     this.hooks.interim(this.assembler.pending);
   }
 

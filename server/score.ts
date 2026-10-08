@@ -22,6 +22,12 @@ export interface ValidScore {
   reason: string;
 }
 
+// A line this long cannot be ruled "no claim". The first live test with the
+// claim flag (2026-10-07, a Trump rally) had 168 of 276 lines marked no-claim,
+// 97 of them six words or more and many plain claims ("They hate America"),
+// which hid heat from the average. Long lines are always scored.
+export const MAX_NOCLAIM_WORDS = 5;
+
 // At most this many words may differ between what was heard and what the
 // model returns, and every word it adds must be capitalized (a proper noun).
 const MAX_CORRECTED_WORDS = 3;
@@ -102,9 +108,10 @@ export function validateToolOutput(response: AnthropicResponse): ValidScore | nu
   if (typeof reason !== "string" || reason.trim() === "") return null;
   if (typeof score !== "number" || !Number.isFinite(score)) return null;
   if (score < 1.0 || score > 5.0) return null;
+  const heardWords = text.trim().split(/\s+/).length;
   return {
     text: text.trim(),
-    claim,
+    claim: claim || heardWords > MAX_NOCLAIM_WORDS,
     score: Math.round(score * 10) / 10,
     reason: reason.trim().slice(0, MAX_REASON_CHARS),
   };

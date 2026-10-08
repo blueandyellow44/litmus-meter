@@ -109,3 +109,13 @@ describe("synopsis route", () => {
     expect(r.summary).toBeNull();
   });
 });
+
+describe("no-claim cap", () => {
+  const reply = (text: string, claim: boolean): AnthropicResponse => ({ content: [{ type: "tool_use", name: "report_score", input: { text, claim, score: 4.1, reason: "r" } }] });
+  it("a line over five words is always scored, whatever the model says", () => {
+    expect(validateToolOutput(reply("They hate America. So in this election.", false))!.claim).toBe(true);
+  });
+  it("a short piece may still be ruled no-claim", () => {
+    expect(validateToolOutput(reply("My dad is...", false))!.claim).toBe(false);
+  });
+});

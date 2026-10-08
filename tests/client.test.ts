@@ -60,12 +60,12 @@ describe("one scoring call per final sentence, none for interims", () => {
     expect(h.calls.map((c) => c.text)).toEqual(["The bill funds the government through March and adds four billion dollars for disaster relief."]);
   });
 
-  it("an unpunctuated tail is scored when the speaker pauses (speech_final or UtteranceEnd), and only once", () => {
+  it("an unpunctuated tail is scored after a long silence (UtteranceEnd), and only once", () => {
     const h = harness();
     h.p.handleMessage(final("now back to you in the studio", true));
-    expect(h.calls.map((c) => c.text)).toEqual(["now back to you in the studio"]);
+    expect(h.calls).toHaveLength(0); // a short pause alone does not end it
     h.p.handleMessage({ type: "UtteranceEnd" });
-    expect(h.calls).toHaveLength(1);
+    expect(h.calls.map((c) => c.text)).toEqual(["now back to you in the studio"]);
 
     h.p.handleMessage(final("and that is the news"));
     h.p.handleMessage({ type: "UtteranceEnd" });
@@ -187,9 +187,9 @@ describe("sentence splitting", () => {
 
   it("assembler carries the unfinished tail", () => {
     const a = new SentenceAssembler();
-    expect(a.addFinal("The first one is done. Two", false)).toEqual(["The first one is done."]);
+    expect(a.addFinal("The first one is done. Two")).toEqual(["The first one is done."]);
     expect(a.pending).toBe("Two");
-    expect(a.addFinal("three four five six.", false)).toEqual(["Two three four five six."]);
+    expect(a.addFinal("three four five six.")).toEqual(["Two three four five six."]);
   });
 });
 
@@ -207,16 +207,16 @@ describe("gauge mapping", () => {
 describe("mid-thought detection (live test 2026-10-07)", () => {
   it("holds a short statement and joins it to what comes next", () => {
     const a = new SentenceAssembler();
-    expect(a.addFinal("My dad is.", true)).toEqual([]);
+    expect(a.addFinal("My dad is.")).toEqual([]);
     expect(a.pending).toBe("My dad is.");
-    expect(a.addFinal("He was a great builder in New York.", true)).toEqual(["My dad is. He was a great builder in New York."]);
+    expect(a.addFinal("He was a great builder in New York.")).toEqual(["My dad is. He was a great builder in New York."]);
   });
 
   it("a four-word statement stands alone; a short question is complete", () => {
     const a = new SentenceAssembler();
-    expect(a.addFinal("We knock out their navy.", false)).toEqual(["We knock out their navy."]);
-    expect(a.addFinal("It is a disgrace.", false)).toEqual(["It is a disgrace."]);
-    expect(a.addFinal("Is it over?", false)).toEqual(["Is it over?"]);
+    expect(a.addFinal("We knock out their navy.")).toEqual(["We knock out their navy."]);
+    expect(a.addFinal("It is a disgrace.")).toEqual(["It is a disgrace."]);
+    expect(a.addFinal("Is it over?")).toEqual(["Is it over?"]);
   });
 
   it("a short tail survives a brief pause but is released by a long silence", () => {
@@ -264,5 +264,20 @@ describe("no-claim lines", () => {
     const e = h.p.store.get(0)!;
     expect(e.text).toBe("We take over the Strait of Hormuz.");
     expect(e.heard).toBe("We take over the Strait of Hormones.");
+  });
+});
+
+describe("rally speech (live test 2026-10-07)", () => {
+  it("an endless unpunctuated run is scored once it reaches 40 words", () => {
+    const a = new SentenceAssembler();
+    expect(a.addFinal(Array(39).fill("word").join(" "))).toEqual([]);
+    expect(a.addFinal("more")).toHaveLength(1);
+  });
+
+  it("a mid-sentence pause does not split the thought", () => {
+    const h = harness();
+    h.p.handleMessage(final("Do you know there's a line", true));
+    h.p.handleMessage(final("that's like three, four miles long of people.", true));
+    expect(h.calls.map((c) => c.text)).toEqual(["Do you know there's a line that's like three, four miles long of people."]);
   });
 });
