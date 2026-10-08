@@ -14,6 +14,10 @@ const ABBREVIATIONS = new Set([
 // True when the "." at the end of `word` closes a sentence rather than an
 // abbreviation (Dr.), an initialism (U.S.) or an initial (J.).
 function endsSentence(word: string): boolean {
+  // Deepgram writes a trailing ellipsis when the speaker trails off or breaks
+  // in ("I stopped them from ever having..."): the thought is not finished,
+  // so the words wait and join what he says next (live test, 2026-10-07).
+  if (/(\.\.\.|\u2026)["')\]]*$/.test(word)) return false;
   if (/[?!]["')\]]*$/.test(word)) return true;
   if (!/\.["')\]]*$/.test(word)) return false;
   const bare = word.replace(/["')\]]+$/, "").replace(/\.$/, "");

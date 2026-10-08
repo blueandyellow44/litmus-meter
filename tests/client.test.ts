@@ -268,6 +268,12 @@ describe("no-claim lines", () => {
 });
 
 describe("rally speech (live test 2026-10-07)", () => {
+  it("a trailing ellipsis is not the end of a thought", () => {
+    const a = new SentenceAssembler();
+    expect(a.addFinal("I stopped them from ever having...")).toEqual([]);
+    expect(a.addFinal("a nuclear weapon, and that was the end of it.")).toEqual(["I stopped them from ever having... a nuclear weapon, and that was the end of it."]);
+  });
+
   it("an endless unpunctuated run is scored once it reaches 40 words", () => {
     const a = new SentenceAssembler();
     expect(a.addFinal(Array(39).fill("word").join(" "))).toEqual([]);

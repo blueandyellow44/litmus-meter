@@ -63,6 +63,7 @@ RULES:
 - Describing is not editorializing. An accurate, checkable characterization of something that happened is reporting.
 - A sourced superlative is a fact ("the largest single-day fall since 2008").
 - QUOTED SPEECH IS SILOED. When the speaker reports someone else's words ("quote", "he said", "in her words", quotation marks), those words are not the speaker's framing. Remove them, then score only what remains: the speaker's own verbs, adjectives, and characterization around the quote. Reporting that a senator called a bill "a catastrophe" is a plain attribution.
+- UNFINISHED LINES. Speech is messy; a line can trail off or restart mid-sentence. Score the words that are there for how they are said. Never score a line low only because it is unfinished.
 - CLAIM. Always give the score the words earn. Set claim false ONLY for a greeting, filler, a sign-off, or a piece of a few words that asserts nothing ("My dad is...", "Thank you, thank you."). Anything that says something about people, events, policy, threats, opponents or the country is a claim, even when it is unfinished, rambling, or a request ("They hate America", "Let them take out Los Angeles", "Go out and vote"). When in doubt, claim is true.
 - TRANSCRIPT ERRORS. The sentence comes from live speech recognition. In "text", return the sentence verbatim, except fix an obvious mishearing of a proper noun (a place, person, group, or law), such as "Strait of Hormones" for "Strait of Hormuz". Change nothing else: no grammar, no other words, no punctuation. Score the corrected sentence.
 
