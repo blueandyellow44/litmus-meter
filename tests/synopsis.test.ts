@@ -110,12 +110,16 @@ describe("synopsis route", () => {
   });
 });
 
-describe("no-claim cap", () => {
-  const reply = (text: string, claim: boolean): AnthropicResponse => ({ content: [{ type: "tool_use", name: "report_score", input: { text, claim, score: 4.1, reason: "r" } }] });
-  it("a line over five words is always scored, whatever the model says", () => {
-    expect(validateToolOutput(reply("They hate America. So in this election.", false))!.claim).toBe(true);
+describe("no-claim gate (live tests 2026-10-07)", () => {
+  const reply = (text: string, claim: boolean, score: number): AnthropicResponse => ({ content: [{ type: "tool_use", name: "report_score", input: { text, claim, score, reason: "r" } }] });
+  it("a hot line cannot hide behind no-claim", () => {
+    expect(validateToolOutput(reply("They hate America. So in this election.", false, 4.1))!.claim).toBe(true);
   });
-  it("a short piece may still be ruled no-claim", () => {
-    expect(validateToolOutput(reply("My dad is...", false))!.claim).toBe(false);
+  it("a calm aside is not counted, however long", () => {
+    expect(validateToolOutput(reply("You know, there are lot of goat I love that goat.", false, 1.0))!.claim).toBe(false);
+  });
+  it("the boundary: 1.4 may be no-claim, 1.5 is counted", () => {
+    expect(validateToolOutput(reply("x y", false, 1.4))!.claim).toBe(false);
+    expect(validateToolOutput(reply("x y", false, 1.5))!.claim).toBe(true);
   });
 });

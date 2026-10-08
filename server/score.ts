@@ -22,11 +22,16 @@ export interface ValidScore {
   reason: string;
 }
 
-// A line this long cannot be ruled "no claim". The first live test with the
-// claim flag (2026-10-07, a Trump rally) had 168 of 276 lines marked no-claim,
-// 97 of them six words or more and many plain claims ("They hate America"),
-// which hid heat from the average. Long lines are always scored.
-export const MAX_NOCLAIM_WORDS = 5;
+// "No claim" is honoured only when the scorer also rates the line calm.
+// History, both from Max's live tests on 2026-10-07:
+//  - Unchecked, the flag hid heat: 168 of 276 rally lines marked no-claim,
+//    many plain claims ("They hate America").
+//  - A five-word cap that replaced it forced filler in instead: 18 of 37
+//    counted lines had reasons like "asserts nothing", 17 scored 1.0, and the
+//    listen averaged 2.0 Grounded where the real claims averaged 2.7.
+// This gate cuts both ways: a hot line cannot hide behind the flag, and an
+// aside cannot be counted as calm evidence.
+export const NOCLAIM_MAX_SCORE = 1.4;
 
 // At most this many words may differ between what was heard and what the
 // model returns, and every word it adds must be capitalized (a proper noun).
@@ -108,10 +113,9 @@ export function validateToolOutput(response: AnthropicResponse): ValidScore | nu
   if (typeof reason !== "string" || reason.trim() === "") return null;
   if (typeof score !== "number" || !Number.isFinite(score)) return null;
   if (score < 1.0 || score > 5.0) return null;
-  const heardWords = text.trim().split(/\s+/).length;
   return {
     text: text.trim(),
-    claim: claim || heardWords > MAX_NOCLAIM_WORDS,
+    claim: claim || score > NOCLAIM_MAX_SCORE,
     score: Math.round(score * 10) / 10,
     reason: reason.trim().slice(0, MAX_REASON_CHARS),
   };
