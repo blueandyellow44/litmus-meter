@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LITMUS Live: visual options, round 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,700;1,6..72,400&display=swap" />
+<style>
+  /* Tokens from ~/LITMUS2/litmus-client/src/styles/tokens.css */
+  :root {
+    --ground: #F1F0ED; --surface: #FAF9F7; --ink: #1E1F22; --ink2: #45464B; --ink3: #63646A;
+    --rule: #D9D7D2; --rule-strong: #838488; --tint: #F7E1C4; --hot-line: #B2511E; --cool-line: #75838A;
+    --p1: #C0C9CE; --p2: #B7AE8E; --p3: #C1893C; --p4: #C05A16; --p5: #AD3118;
+    --mark-stroke: rgba(30,31,34,0.55);
+    --serif: "Newsreader", Georgia, serif; --sans: "Instrument Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.5; }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 16px 72px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .lede { color: var(--ink2); margin: 0 0 6px; }
+  .note { font-size: 13px; color: var(--ink3); margin: 0 0 22px; }
+  .bar { position: sticky; top: 0; z-index: 4; background: var(--ground); padding: 10px 0; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--rule); margin-bottom: 18px; }
+  button { font: inherit; font-weight: 600; font-size: 14px; border: 1px solid var(--ink); background: var(--ink); color: var(--surface); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+  button.ghost { background: var(--surface); color: var(--ink); }
+  .clock { font-size: 13px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+  section { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; margin: 0 0 22px; overflow: hidden; }
+  .tag { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+  h2 { font-size: 20px; margin: 2px 0 4px; }
+  .what { color: var(--ink2); margin: 0 0 14px; font-size: 15px; max-width: 760px; }
+  .label { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+  .serif { font-family: var(--serif); }
+  mark.hl { background: var(--tint); color: inherit; text-decoration: underline; text-decoration-color: var(--hot-line); text-decoration-thickness: 1.5px; text-underline-offset: .22em; border-radius: 2px; padding: 0 .06em; }
+
+  /* A. seismograph */
+  .seis { position: relative; height: 220px; background: linear-gradient(var(--surface), var(--surface)); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .seis svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .seis-now { margin-top: 10px; min-height: 58px; font-family: var(--serif); font-size: 20px; line-height: 1.35; }
+  .seis-meta { font-size: 13px; color: var(--ink2); }
+
+  /* B. said vs how */
+  .split-head, .split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .split-head { border-bottom: 1px solid var(--rule-strong); padding-bottom: 6px; margin-bottom: 4px; }
+  .split-row { padding: 10px 0; border-bottom: 1px solid var(--rule); animation: rise 400ms ease; }
+  .split-row .fact { font-size: 15px; color: var(--ink2); }
+  .split-row .said { font-family: var(--serif); font-size: 18px; line-height: 1.4; }
+  .gap { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 999px; color: var(--ink); border: 1px solid var(--mark-stroke); }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* C. targets */
+  .targets { display: grid; gap: 14px; }
+  .target { display: grid; grid-template-columns: 170px 1fr 92px; gap: 12px; align-items: center; }
+  .target .who { font-weight: 600; }
+  .target .who small { display: block; font-weight: 400; font-size: 12px; color: var(--ink3); }
+  .lane { position: relative; height: 30px; border-radius: 6px; background: linear-gradient(90deg, rgba(192,201,206,.35), rgba(173,49,24,.18)); }
+  .lane .dot { position: absolute; top: 7px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--mark-stroke); transform: translateX(-50%); cursor: pointer; }
+  .target .avg { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .target .avg small { display: block; font-weight: 400; font-size: 12px; color: var(--ink3); }
+  .axis { display: grid; grid-template-columns: 170px 1fr 92px; gap: 12px; font-size: 12px; color: var(--ink3); }
+  .axis div:nth-child(2) { display: flex; justify-content: space-between; }
+  .pick { margin-top: 12px; min-height: 48px; font-family: var(--serif); font-size: 18px; }
+
+  /* D. arc by topic */
+  .arc svg { width: 100%; height: 230px; display: block; }
+  .chapters { display: flex; gap: 3px; margin-top: 4px; }
+  .chapter { border-radius: 6px; padding: 8px 8px 9px; min-width: 0; border: 1px solid var(--mark-stroke); color: var(--ink); }
+  .chapter b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chapter span { font-size: 12px; font-variant-numeric: tabular-nums; }
+
+  /* E. chyron */
+  .tv { position: relative; aspect-ratio: 16 / 9; max-height: 460px; width: 100%; border-radius: 8px; overflow: hidden; background: radial-gradient(ellipse at 50% 35%, #4a4f57 0%, #22252a 70%); }
+  .tv .podium { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 34%; height: 46%; background: #15171a; border-radius: 10px 10px 0 0; }
+  .tv .head { position: absolute; left: 50%; bottom: 44%; transform: translateX(-50%); width: 12%; aspect-ratio: 1; border-radius: 50%; background: #2c3036; }
+  .tv .src { position: absolute; top: 12px; left: 14px; font-size: 11px; color: #b9bcc2; letter-spacing: .08em; text-transform: uppercase; }
+  .lower { position: absolute; left: 0; right: 0; bottom: 0; }
+  .lower .top { display: flex; align-items: stretch; margin: 0 16px 0; }
+  .lower .chip { background: var(--surface); color: var(--ink); font-weight: 700; font-size: 15px; padding: 8px 12px; display: flex; gap: 10px; align-items: center; border-radius: 6px 0 0 0; }
+  .lower .chip i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--mark-stroke); }
+  .lower .line { flex: 1; background: rgba(250,249,247,.94); color: var(--ink); font-family: var(--serif); font-size: 18px; padding: 8px 12px; border-radius: 0 6px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ticker { background: var(--ink); color: var(--surface); font-size: 14px; height: 34px; overflow: hidden; position: relative; }
+  .ticker .crawl { position: absolute; white-space: nowrap; top: 7px; left: 100%; animation: crawl 26s linear infinite; }
+  .ticker b { color: var(--tint); letter-spacing: .06em; }
+  @keyframes crawl { to { transform: translateX(-100%); left: 0; } }
+  .brand { position: absolute; top: 12px; right: 14px; display: flex; gap: 2px; align-items: center; }
+  .brand i { width: 5px; height: 15px; border-radius: 1px; display: block; }
+  .brand span { color: #e9e9ea; font-weight: 600; letter-spacing: .2em; font-size: 13px; margin-left: 8px; }
+
+  /* F. swelling words */
+  .swell { font-family: var(--serif); line-height: 1.55; min-height: 220px; }
+  .swell span.w { transition: font-size 500ms ease, color 500ms ease; display: inline; }
+  .swell-legend { font-size: 13px; color: var(--ink3); margin-top: 8px; }
+
+  .tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--surface); font-size: 13px; padding: 6px 8px; border-radius: 6px; max-width: 340px; opacity: 0; transition: opacity 120ms; z-index: 9; }
+  @media (max-width: 680px) {
+    .split-head, .split-row { grid-template-columns: 1fr; gap: 4px; }
+    .target, .axis { grid-template-columns: 110px 1fr 64px; }
+    .lower .line { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>LITMUS Live: round 2, six more directions</h1>
+  <p class="lede">Mockups only. Press Play to watch the four live ones run together on the same speech.</p>
+  <p class="note">Lines and their scores are from Max's rally test on 2026-10-07. The neutral restatements, topics, targets, device labels and word heat are illustrative: the meter does not produce them yet. Underlines follow the ruling: the speaker's own hyperbolic words, never words he attributes to someone else.</p>
+  <div class="bar"><button id="play">Play the speech</button><button class="ghost" id="reset">Show the finished recap</button><span class="clock" id="clock">0:00</span></div>
+
+  <section>
+    <span class="tag">A · live and recap</span>
+    <h2>Rhetorical seismograph</h2>
+    <p class="what">A pen tracing the speech like a seismograph: calm speech draws a low, cool line; heat throws spikes. Rhetorical devices drop a marker on the spike that produced them. Afterwards the whole trace stays, so you see where the earthquakes were.</p>
+    <div class="seis" id="seis"><svg id="seis-svg" preserveAspectRatio="none"></svg></div>
+    <div class="seis-now" id="seis-now"></div>
+    <div class="seis-meta" id="seis-meta"></div>
+  </section>
+
+  <section>
+    <span class="tag">B · live and recap</span>
+    <h2>What was said, and how it was said</h2>
+    <p class="what">Each line is shown twice: on the left the plain claim, stripped of its framing; on the right the words he used, with the hyperbolic ones underlined. The gap between the columns is the rhetoric. This is LITMUS's own idea, facts first and framing second, applied live.</p>
+    <div class="split-head"><span class="label">The claim, plainly</span><span class="label">How he said it</span></div>
+    <div id="split"></div>
+  </section>
+
+  <section>
+    <span class="tag">C · live, fullest in the recap</span>
+    <h2>Who gets the heat</h2>
+    <p class="what">Every line sorted by who it is about. Each dot is a line, placed left to right by how hot it was, so you see at once that the opponents got the fire and the voters got the calm.</p>
+    <div class="axis"><div></div><div><span>Proportionate</span><span>Hyperbolic</span></div><div></div></div>
+    <div class="targets" id="targets"></div>
+    <div class="pick" id="pick"><span class="label">Tap a dot</span></div>
+  </section>
+
+  <section>
+    <span class="tag">D · recap</span>
+    <h2>The arc of the speech</h2>
+    <p class="what">The speech split into its chapters by subject, each colored by how hot it ran, with the heat line drawn over the top. One glance tells you the structure: where he opened, where he turned, where he peaked, how he closed.</p>
+    <div class="arc"><svg id="arc-svg" viewBox="0 0 1000 230" preserveAspectRatio="none"></svg></div>
+    <div class="chapters" id="chapters"></div>
+  </section>
+
+  <section>
+    <span class="tag">E · live, built for screen recording</span>
+    <h2>Broadcast overlay</h2>
+    <p class="what">The meter as a TV lower third over the speech itself: the band chip, the line he just said with its hyperbolic words underlined, and a crawl naming each device with the words that show it. Made to be screen-recorded and posted.</p>
+    <div class="tv">
+      <div class="head"></div><div class="podium"></div>
+      <div class="src">Rally · live audio</div>
+      <div class="brand"><i style="background:var(--p1)"></i><i style="background:var(--p2)"></i><i style="background:var(--p3)"></i><i style="background:var(--p4)"></i><i style="background:var(--p5)"></i><span>LITMUS LIVE</span></div>
+      <div class="lower">
+        <div class="top"><div class="chip" id="tv-chip"><i id="tv-sw"></i><span id="tv-band">Waiting</span></div><div class="line" id="tv-line">&nbsp;</div></div>
+        <div class="ticker"><div class="crawl" id="crawl"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="tag">F · live</span>
+    <h2>Words that swell</h2>
+    <p class="what">The transcript writes itself with every word sized and colored by its heat. Plain words stay small and grey; loaded words grow, darken and underline. The paragraph turns into a picture of the speech's temperature.</p>
+    <div class="swell" id="swell"></div>
+    <div class="swell-legend">Size and color both rise with heat, so the shape reads in grey print too.</div>
+  </section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+const BANDS = [
+  { below: 1.5, name: "Proportionate", c: "#C0C9CE" },
+  { below: 2.5, name: "Grounded", c: "#B7AE8E" },
+  { below: 3.5, name: "Mixed Signals", c: "#C1893C" },
+  { below: 4.5, name: "Running Hot", c: "#C05A16" },
+  { below: 99, name: "Hyperbolic", c: "#AD3118" },
+];
+const band = (s) => BANDS.find((b) => s < b.below);
+
+// [line, score or null, marks, plain claim, target, topic, device]
+const L = [
+  ["Thank you very much, everybody.", null, [], "", "Crowd", "Opening", ""],
+  ["This is the most important midterm election.", 4.2, ["the most important"], "The speaker said this midterm matters.", "Voters", "Opening", "Unanchored superlative"],
+  ["We're gonna beat them big.", 4.2, ["beat them big"], "The speaker predicted a win.", "Opponents", "Opening", "Victory framing"],
+  ["Also just announced a $3,000,000,000 investment to bring medical manufacturing back to the United States.", 2.1, [], "A company announced a $3 billion US manufacturing investment.", "His record", "Economy", ""],
+  ["The biggest part of their investment is in Nebraska.", 1.3, [], "Most of it is in Nebraska.", "His record", "Economy", ""],
+  ["My administration has also taken historic action to dramatically lower drug prices.", 3.8, ["historic action", "dramatically"], "The administration acted on drug prices.", "His record", "Economy", "Self-praise as fact"],
+  ["We knock out their navy.", 3.8, ["knock out"], "US strikes hit Iran's navy.", "Iran", "Military", "Violence framing"],
+  ["We knock out their leadership.", 3.8, ["knock out"], "US strikes hit Iran's leadership.", "Iran", "Military", "Violence framing"],
+  ["We will take over the Strait of Hormuz.", 4.8, ["take over"], "The speaker said the US would control the Strait of Hormuz.", "Iran", "Military", "Conquest framing"],
+  ["I stopped them from ever having a nuclear weapon, and that was the end of that.", 3.4, ["the end of that"], "The speaker said he prevented an Iranian nuclear weapon.", "Iran", "Military", ""],
+  ["There has been no president that's done more in the first two years.", 4.1, ["no president that's done more"], "The speaker praised his first two years.", "His record", "Economy", "Unanchored superlative"],
+  ["They hate America.", 4.4, ["hate America"], "The speaker said opponents oppose the country.", "Opponents", "Opponents", "Ad hominem"],
+  ["All of your tax cuts will be gone.", 3.9, ["will be gone"], "The speaker said opponents would end tax cuts.", "Opponents", "Opponents", "Appeal to fear"],
+  ["They could take out a city. Let them take out Los Angeles.", 4.6, ["take out Los Angeles"], "The speaker described a threat to a US city.", "Opponents", "Opponents", "Appeal to fear"],
+  ["Sick individuals, drunk, deranged, communist, radicalized lunatics.", 5.0, ["Sick individuals", "deranged", "radicalized lunatics"], "The speaker insulted his opponents.", "Opponents", "Opponents", "Ad hominem"],
+  ["The press will never tell you this.", 3.7, ["will never tell you"], "The speaker said the press omits this.", "The press", "Opponents", "Us vs. them"],
+  ["We've been fighting to save America from all of the corrupt and sinister forces.", 4.2, ["corrupt and sinister forces"], "The speaker described his campaign as a fight.", "Opponents", "Opponents", "Us vs. them"],
+  ["So I'm asking you to do me one favor, pretend I'm on the ballot.", 1.6, [], "The speaker asked supporters to vote.", "Voters", "Get out the vote", ""],
+  ["Early voting or on election day, November 3, you go out and vote.", 1.2, [], "Election day is November 3.", "Voters", "Get out the vote", ""],
+  ["We're going to win so big, bigger than ever before.", 4.3, ["bigger than ever before"], "The speaker predicted a large win.", "Voters", "Get out the vote", "Victory framing"],
+  ["Thank you, God bless you.", null, [], "", "Crowd", "Get out the vote", ""],
+];
+
+const tip = document.getElementById("tip");
+const showTip = (e, h) => { tip.innerHTML = h; tip.style.opacity = 1; tip.style.left = Math.min(e.clientX + 12, innerWidth - 350) + "px"; tip.style.top = e.clientY + 14 + "px"; };
+const hideTip = () => (tip.style.opacity = 0);
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+function marked(text, marks) {
+  let out = esc(text);
+  for (const m of marks) out = out.replace(esc(m), `<mark class="hl">${esc(m)}</mark>`);
+  return out;
+}
+
+/* A. seismograph */
+const seisSvg = document.getElementById("seis-svg");
+function drawSeis(n) {
+  const W = seisSvg.clientWidth || 960, H = 220, pad = 18;
+  seisSvg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const scored = L.slice(0, n).map((r, i) => ({ s: r[1] ?? 1.0, nc: r[1] == null, i, r }));
+  const step = (W - 40) / (L.length - 1);
+  const y = (s) => H - pad - ((s - 1) / 4) * (H - 2 * pad - 30);
+  let g = "";
+  [1.5, 2.5, 3.5, 4.5].forEach((v) => (g += `<line x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="#D9D7D2" stroke-dasharray="3 5"/>`));
+  // jittered trace between points, like a pen
+  for (let k = 1; k < scored.length; k++) {
+    const a = scored[k - 1], b = scored[k];
+    const x1 = 20 + a.i * step, x2 = 20 + b.i * step;
+    let d = `M${x1},${y(a.s)}`;
+    const segs = 14;
+    for (let j = 1; j <= segs; j++) {
+      const t = j / segs, x = x1 + (x2 - x1) * t;
+      const base = y(a.s) + (y(b.s) - y(a.s)) * t;
+      const amp = ((a.s + b.s) / 2 - 1) * 5.5;
+      d += ` L${x.toFixed(1)},${(base + Math.sin(j * 2.3 + k) * amp).toFixed(1)}`;
+    }
+    g += `<path d="${d}" fill="none" stroke="${band(b.s).c}" stroke-width="${b.nc ? 1.5 : 2.5}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  scored.forEach(({ s, nc, i, r }) => {
+    const x = 20 + i * step;
+    if (!nc && r[6]) {
+      g += `<line x1="${x}" x2="${x}" y1="${y(s)}" y2="${y(s) - 22}" stroke="#1E1F22" stroke-width="1"/>`;
+      g += `<circle cx="${x}" cy="${y(s) - 26}" r="5" fill="${band(s).c}" stroke="#1E1F22" data-i="${i}"/>`;
+      if (s >= 4.4) g += `<text x="${x}" y="${y(s) - 36}" font-size="11" text-anchor="middle" fill="#45464B" font-family="Instrument Sans">${r[6]}</text>`;
+    }
+    g += `<circle cx="${x}" cy="${y(s)}" r="${nc ? 3 : 4}" fill="${nc ? "#FAF9F7" : band(s).c}" stroke="rgba(30,31,34,.55)" data-i="${i}"/>`;
+  });
+  if (n) { const last = scored[scored.length - 1]; g += `<circle cx="${20 + last.i * step}" cy="${y(last.s)}" r="9" fill="none" stroke="#1E1F22" stroke-width="1.5"><animate attributeName="r" values="6;11;6" dur="1.2s" repeatCount="indefinite"/></circle>`; }
+  seisSvg.innerHTML = g;
+  seisSvg.querySelectorAll("circle[data-i]").forEach((c) => {
+    const r = L[+c.dataset.i];
+    c.addEventListener("mouseenter", (e) => showTip(e, `${r[1] == null ? "no claim" : r[1].toFixed(1) + " " + band(r[1]).name}${r[6] ? " · " + r[6] : ""}<br>${esc(r[0])}`));
+    c.addEventListener("mouseleave", hideTip);
+  });
+  const cur = L[Math.max(0, n - 1)];
+  document.getElementById("seis-now").innerHTML = n ? marked(cur[0], cur[2]) : "&nbsp;";
+  document.getElementById("seis-meta").textContent = n ? (cur[1] == null ? "Not scored, no claim" : `${cur[1].toFixed(1)} ${band(cur[1]).name}${cur[6] ? " · " + cur[6] : ""}`) : "";
+}
+
+/* B. split */
+const split = document.getElementById("split");
+function drawSplit(n, all) {
+  const rows = L.slice(0, n).filter((r) => r[1] != null);
+  const show = all ? rows : rows.slice(-5);
+  split.innerHTML = show.reverse().map((r) => {
+    const gapTxt = r[1] < 1.5 ? "No gap" : r[1] < 2.5 ? "Small gap" : r[1] < 3.5 ? "Visible gap" : r[1] < 4.5 ? "Wide gap" : "All framing";
+    return `<div class="split-row"><div class="fact">${esc(r[3])}</div><div class="said">${marked(r[0], r[2])}<br><span class="gap" style="background:${band(r[1]).c}">${r[1].toFixed(1)} · ${gapTxt}</span></div></div>`;
+  }).join("");
+}
+
+/* C. targets */
+const TARGETS = ["Opponents", "The press", "Iran", "His record", "Voters"];
+function drawTargets(n) {
+  const rows = L.slice(0, n).filter((r) => r[1] != null);
+  document.getElementById("targets").innerHTML = TARGETS.map((t) => {
+    const mine = rows.filter((r) => r[4] === t);
+    const avg = mine.length ? mine.reduce((a, r) => a + r[1], 0) / mine.length : null;
+    return `<div class="target"><div class="who">${t}<small>${mine.length} line${mine.length === 1 ? "" : "s"}</small></div><div class="lane">${mine.map((r) => `<span class="dot" data-t="${esc(r[0])}" data-s="${r[1]}" style="left:${((r[1] - 1) / 4) * 100}%;background:${band(r[1]).c}"></span>`).join("")}</div><div class="avg">${avg ? avg.toFixed(1) : "–"}<small>${avg ? band(avg).name : ""}</small></div></div>`;
+  }).join("");
+  document.querySelectorAll(".lane .dot").forEach((d) => {
+    const on = () => { const r = L.find((x) => x[0] === d.dataset.t); document.getElementById("pick").innerHTML = `<span class="label">${(+d.dataset.s).toFixed(1)} · ${band(+d.dataset.s).name}</span><br>${marked(r[0], r[2])}`; };
+    d.addEventListener("mouseenter", on); d.addEventListener("click", on);
+  });
+}
+
+/* D. arc */
+function drawArc() {
+  const svg = document.getElementById("arc-svg"), W = 1000, H = 230;
+  const pts = L.map((r, i) => [ (i / (L.length - 1)) * W, H - 20 - (((r[1] ?? 1) - 1) / 4) * (H - 50) ]);
+  // smooth with a moving average so it reads as an arc
+  const sm = pts.map((p, i) => { const w = pts.slice(Math.max(0, i - 1), i + 2); return [p[0], w.reduce((a, q) => a + q[1], 0) / w.length]; });
+  let d = `M${sm[0][0]},${sm[0][1]}`;
+  for (let i = 1; i < sm.length; i++) { const [x0, y0] = sm[i - 1], [x1, y1] = sm[i]; const cx = (x0 + x1) / 2; d += ` C${cx},${y0} ${cx},${y1} ${x1},${y1}`; }
+  const topics = []; L.forEach((r, i) => { const last = topics[topics.length - 1]; if (!last || last.name !== r[5]) topics.push({ name: r[5], from: i, to: i, s: [] }); topics[topics.length - 1].to = i; if (r[1] != null) topics[topics.length - 1].s.push(r[1]); });
+  let g = "";
+  topics.forEach((t) => { const x0 = (t.from / (L.length - 1)) * W, x1 = (t.to / (L.length - 1)) * W; const avg = t.s.reduce((a, b) => a + b, 0) / t.s.length; g += `<rect x="${x0}" y="0" width="${Math.max(2, x1 - x0)}" height="${H}" fill="${band(avg).c}" opacity=".16"/>`; });
+  g += `<path d="${d} L${W},${H} L0,${H} Z" fill="rgba(192,90,22,.10)"/><path d="${d}" fill="none" stroke="#1E1F22" stroke-width="2.5"/>`;
+  const peak = L.reduce((m, r, i) => ((r[1] ?? 0) > (L[m][1] ?? 0) ? i : m), 0);
+  g += `<circle cx="${sm[peak][0]}" cy="${sm[peak][1]}" r="6" fill="#AD3118" stroke="#FAF9F7" stroke-width="2"/><text x="${sm[peak][0] - 10}" y="${sm[peak][1] - 14}" text-anchor="end" font-size="13" fill="#1E1F22" font-family="Newsreader">Peak: “${L[peak][2][0]}”</text>`;
+  svg.innerHTML = g;
+  document.getElementById("chapters").innerHTML = topics.map((t) => { const avg = t.s.reduce((a, b) => a + b, 0) / t.s.length; return `<div class="chapter" style="flex:${t.to - t.from + 1};background:${band(avg).c}"><b>${t.name}</b><span>${avg.toFixed(1)} ${band(avg).name}</span></div>`; }).join("");
+}
+
+/* E. chyron */
+function drawTv(n) {
+  const scored = L.slice(0, n).filter((r) => r[1] != null);
+  const last2 = scored.slice(-2);
+  const needle = last2.length ? last2.reduce((a, r) => a + r[1], 0) / last2.length : null;
+  document.getElementById("tv-band").textContent = needle ? `${band(needle).name.toUpperCase()} ${needle.toFixed(1)}` : "WAITING";
+  document.getElementById("tv-sw").style.background = needle ? band(needle).c : "transparent";
+  const cur = scored[scored.length - 1];
+  document.getElementById("tv-line").innerHTML = cur ? marked(cur[0], cur[2]) : "&nbsp;";
+  const devices = L.slice(0, n).filter((r) => r[6]);
+  document.getElementById("crawl").innerHTML = (devices.length ? devices : L.filter((r) => r[6])).map((r) => `<b>${r[6].toUpperCase()}</b> “${esc(r[2][0] || r[0])}” &nbsp;·&nbsp; `).join("");
+}
+
+/* F. swell */
+function drawSwell(n) {
+  const html = L.slice(0, n).map((r) => {
+    const marks = r[2].map((m) => m.toLowerCase());
+    return r[0].split(" ").map((w) => {
+      const hot = marks.some((m) => m.split(" ").includes(w.toLowerCase().replace(/[.,!?]/g, "")));
+      const s = r[1] ?? 1;
+      const heat = hot ? s : Math.min(s, 2.2) * 0.6 + 0.4;
+      const size = 14 + (heat - 1) * 6;
+      const col = hot ? band(s).c === "#C0C9CE" ? "#45464B" : "#1E1F22" : "#8a8b90";
+      const word = esc(w);
+      return `<span class="w" style="font-size:${size.toFixed(0)}px;color:${col};${hot ? "font-weight:700" : ""}">${hot ? `<mark class="hl">${word}</mark>` : word}</span>`;
+    }).join(" ");
+  }).join(" ");
+  document.getElementById("swell").innerHTML = html;
+}
+
+function render(n, recap) { drawSeis(n); drawSplit(n, recap); drawTargets(n); drawTv(n); drawSwell(n); document.getElementById("clock").textContent = `${Math.floor((n * 9) / 60)}:${String((n * 9) % 60).padStart(2, "0")}`; }
+drawArc();
+render(L.length, false);
+
+let timer = null;
+document.getElementById("play").addEventListener("click", () => {
+  clearInterval(timer); let n = 0; render(0, false);
+  timer = setInterval(() => { n++; render(n, false); if (n >= L.length) clearInterval(timer); }, 1100);
+});
+document.getElementById("reset").addEventListener("click", () => { clearInterval(timer); render(L.length, true); });
+addEventListener("resize", () => drawSeis(L.length));
+</script>
+</body>
+</html>
