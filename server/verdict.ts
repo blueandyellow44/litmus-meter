@@ -101,9 +101,9 @@ export interface ParsedVerdict {
   styleName: string | null;
 }
 
-const MAX_STYLE_WORDS = 6;
+const MAX_STYLE_WORDS = 8;
 
-// Optional like the summary; over six words or empty and it is left out.
+// Optional like the summary; over eight words or empty and it is left out.
 function cleanStyle(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const t = v.trim().replace(/[."]+$/g, "").replace(/\u2014/g, ", ");

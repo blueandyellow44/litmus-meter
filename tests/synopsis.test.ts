@@ -253,3 +253,12 @@ describe("style name", () => {
     expect(parseVerdict(base).ok).toBe(true);
   });
 });
+
+describe("tool schemas require every field (live test 2026-10-07)", () => {
+  it("the scorer and the verdict mark every property required, since Haiku skips optional ones", async () => {
+    const { SCORE_TOOL, VERDICT_TOOL } = await import("../server/rubric.ts");
+    for (const tool of [SCORE_TOOL, VERDICT_TOOL]) {
+      expect([...tool.input_schema.required].sort()).toEqual(Object.keys(tool.input_schema.properties).sort());
+    }
+  });
+});

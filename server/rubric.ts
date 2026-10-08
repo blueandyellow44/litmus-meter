@@ -103,7 +103,10 @@ export const SCORE_TOOL = {
       },
       appeal: { type: "string", enum: ["pathos", "ethos", "logos", "none"] },
     },
-    required: ["text", "claim", "score", "reason", "continues"],
+    // Every field required: Haiku skips optional ones. With devices and appeal
+    // optional, Max's live test (2026-10-07) got an appeal on almost no lines
+    // ("Ethos 100%") and moves on 2 of 11.
+    required: ["text", "claim", "score", "reason", "continues", "marks", "devices", "appeal"],
   },
 } as const;
 
@@ -142,7 +145,7 @@ THE FLAGS:
 
 USE THE WHOLE SCALE. A campaign rally that attacks opponents with epithets is routinely 3.5-4.5. A calm briefing is 1.0-2.0. Do not average toward the middle.
 
-style_name: two to six words naming the speech's persuasive style by its method, for example "Grievance and victory" or "Briefing by the numbers". Describe what the speech does, never what the speaker is.
+style_name: two to eight words naming the speech's persuasive style by its method, for example "Grievance and victory" or "Briefing by the numbers". Describe what the speech does, never what the speaker is.
 
 summary: a paragraph of three to five sentences saying, strictly neutrally, what the speaker said: the subjects, the claims made, the promises and the requests, each attributed to the speaker ("The speaker said...", "The speaker claimed..."). This is the facts panel, read before any verdict, as on the LITMUS site. No adjectives doing emotional work, no judgement, no verdict, no mention of the score. Do not repeat the speaker's loaded words as fact. Plain words, short sentences, no em dashes, no contractions.
 
@@ -168,9 +171,9 @@ export const VERDICT_TOOL = {
       one_sided_sourcing: { type: "boolean" },
       advocacy_speech: { type: "boolean" },
       summary: { type: "string", description: "Three to five neutral sentences on what the speaker said, each claim attributed to the speaker." },
-      style_name: { type: "string", description: "Two to six words naming the persuasive style, describing the method, never the person." },
+      style_name: { type: "string", description: "Two to eight words naming the persuasive style, describing the method, never the person." },
       why: { type: "string", description: "One sentence quoting at least three consecutive words from the transcript." },
     },
-    required: ["framing", "language", "sourcing", "fallacies", "structure", "loaded_framing", "emotional_open", "fallacy_count", "one_sided_sourcing", "advocacy_speech", "summary", "why"],
+    required: ["framing", "language", "sourcing", "fallacies", "structure", "loaded_framing", "emotional_open", "fallacy_count", "one_sided_sourcing", "advocacy_speech", "style_name", "summary", "why"],
   },
 } as const;

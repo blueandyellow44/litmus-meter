@@ -203,6 +203,7 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         if (!verdict) verdict = { ...computeVerdict(parsed.value.dims, parsed.value.flags), dims: parsed.value.dims };
         summaryText = summaryText ?? parsed.value.summary;
         styleName = styleName ?? parsed.value.styleName;
+        if (!parsed.value.styleName) deps.log({ event: "style_name_dropped", raw: (verdictInput(response) as { style_name?: unknown } | null)?.style_name ?? null });
         if (whyQuotesALine(parsed.value.why, transcript)) why = parsed.value.why;
         else {
           problem = "why did not quote three consecutive words of the transcript";

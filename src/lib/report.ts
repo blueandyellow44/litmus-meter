@@ -135,9 +135,15 @@ export class Report {
     }
     // The two hottest moments carry their words once the speech is over.
     if (this.ended && !this.highlight) {
-      const top = [...pts].sort((a, b) => b.e.score! - a.e.score! || a.e.seq - b.e.seq).slice(0, 2);
+      // Two different moments with two different labels: a repeated phrase
+      // ("go to jail" twice, live test 2026-10-07) labels only its first peak.
+      const wordsOf = (e: Entry) => e.marks?.[0] ?? e.text.split(" ").slice(0, 4).join(" ");
+      const ranked = [...pts].sort((a, b) => b.e.score! - a.e.score! || a.e.seq - b.e.seq);
+      const top = ranked.slice(0, 1);
+      const second = ranked.find((p) => top[0] && wordsOf(p.e).toLowerCase() !== wordsOf(top[0].e).toLowerCase());
+      if (second) top.push(second);
       top.forEach((p, k) => {
-        const words = p.e.marks?.[0] ?? p.e.text.split(" ").slice(0, 4).join(" ");
+        const words = wordsOf(p.e);
         const t = el("text", { x: p.px + (k ? 10 : -10), y: Math.max(14, p.py - 12), "font-size": 13, "text-anchor": k ? "start" : "end", fill: "#1E1F22", "font-family": "Newsreader, Georgia, serif" });
         t.textContent = `“${words}” ${p.e.score!.toFixed(1)}`;
         svg.append(t);
@@ -206,7 +212,7 @@ export class Report {
     for (const e of lines) for (const d of e.devices ?? []) if (d.kind === kind) counts.set(d.label, [...(counts.get(d.label) ?? []), e]);
     const ranked = [...counts.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
     if (!ranked.length) {
-      target.innerHTML = '<p class="def">None yet.</p>';
+      target.innerHTML = `<p class="def">${this.ended ? "None found in this speech." : "None yet."}</p>`;
       return;
     }
     const max = ranked[0]![1].length;
