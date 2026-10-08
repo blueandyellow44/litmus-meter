@@ -244,7 +244,7 @@ describe("scoring route", () => {
   });
 
   it("validates and rounds a good tool call to one decimal", () => {
-    expect(validateToolOutput(goodResponse(3.46, "loaded verb"))).toEqual({ text: "x", claim: true, score: 3.5, reason: "loaded verb" });
+    expect(validateToolOutput(goodResponse(3.46, "loaded verb"))).toEqual({ text: "x", claim: true, continues: false, score: 3.5, reason: "loaded verb" });
     expect(validateToolOutput(goodResponse(1.0))).not.toBeNull();
     expect(validateToolOutput(goodResponse(5.0))).not.toBeNull();
     expect(validateToolOutput(goodResponse(0.9))).toBeNull();
@@ -257,5 +257,22 @@ describe("scoring route", () => {
     const { deps } = makeDeps(store);
     const res = await handle(req("/api/login", { method: "POST", body: JSON.stringify({ passcode: PASSCODE }) }), env(store, { STUB_MODE: "1" }), deps);
     expect(res.status).toBe(503);
+  });
+});
+
+describe("context on the score route", () => {
+  it("sends the previous lines labelled as context, with the line to score last", async () => {
+    const store = new MemoryStore();
+    const cookie = await (async () => {
+      const { deps } = makeDeps(store);
+      const res = await handle(req("/api/login", { method: "POST", body: JSON.stringify({ passcode: PASSCODE }) }), env(store), deps);
+      return res.headers.get("set-cookie")!.split(";")[0]!;
+    })();
+    const h = makeDeps(store);
+    await handle(req("/api/score", { method: "POST", cookie, body: JSON.stringify({ text: "That was the end of that.", context: ["a", "I stopped them from ever having nukes.", "extra ignored? no, last two kept"] }) }), env(store), h.deps);
+    const content = (h.calls[0] as { messages: Array<{ content: string }> }).messages[0]!.content;
+    expect(content).toContain("do not score");
+    expect(content.trim().endsWith("Score this line:\nThat was the end of that.")).toBe(true);
+    expect(content).not.toContain("- a\n");
   });
 });

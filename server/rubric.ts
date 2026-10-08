@@ -67,6 +67,9 @@ RULES:
 - CLAIM. Always give the score the words earn, whatever you set here. Set claim false for a greeting, filler, an aside, a sign-off, a compliment to someone in the room, or a broken piece that asserts nothing ("That was the end of that.", "I love that goat.", "It's already... And again, remember this."). A claim-false line is listed as not scored and does not count toward the needle or the verdict. Anything that says something about people, events, policy, threats, opponents or the country is a claim, even when it is unfinished or rambling ("They hate America", "Let them take out Los Angeles").
 - TRANSCRIPT ERRORS. The sentence comes from live speech recognition. In "text", return the sentence verbatim, except fix an obvious mishearing of a proper noun (a place, person, group, or law), such as "Strait of Hormones" for "Strait of Hormuz". Change nothing else: no grammar, no other words, no punctuation. Score the corrected sentence.
 
+- CONTEXT. You may be given the speaker's previous one or two lines, marked as context. Use them only to understand what this line refers to ("that", "them", "it"). Do not score the context lines, and do not let their heat carry into this line: score this line's own words.
+- CONTINUES. Set continues true when this line finishes a thought the previous line began (the previous line broke off, or this line is its payoff: "I stopped them from ever having" then "a nuclear weapon, and that was the end of that"). Then score the whole thought, the previous line and this one together, and write the reason for the whole thought. Otherwise continues is false.
+
 Call report_score once. reason: one short plain-English clause naming the words that set the score. No em dashes.
 `.trim();
 
@@ -80,32 +83,70 @@ export const SCORE_TOOL = {
       claim: { type: "boolean", description: "False only for greetings, filler, sign-offs and few-word pieces that assert nothing. When in doubt, true." },
       score: { type: "number", description: "1.0-5.0, one decimal. 1 = most proportionate, 5 = most hyperbolic." },
       reason: { type: "string", description: "One short plain-English clause." },
+      continues: { type: "boolean", description: "True when this line finishes the thought the previous line began; then score the whole thought." },
     },
-    required: ["text", "claim", "score", "reason"],
+    required: ["text", "claim", "score", "reason", "continues"],
   },
 } as const;
 
-// The end-of-listen synopsis. The band and the number are computed in code
-// (the plain average of the claim lines, Max 2026-10-07); the model writes only
-// the one-sentence Why, the way the LITMUS site's "Why this score" works.
-export const SYNOPSIS_PROMPT = `
-You write the one-sentence "Why" for a finished listen on the P/H (Proportionate-to-Hyperbolic) Balance. The band and the score are already decided; do not change or argue with them.
+// The end-of-listen verdict, scored the way the LITMUS site scores an article
+// (Max, 2026-10-07). The model reads the whole transcript and judges five
+// dimensions and the flags; server/verdict.ts computes the number. Anchors and
+// rules adapted from calibration.ts: headline becomes framing, the writer
+// becomes the speaker, quoted words stay siloed, the binding rules stand.
+export const VERDICT_PROMPT = `
+You judge a whole speech, from its transcript, on the P/H (Proportionate-to-Hyperbolic) Balance: HOW it is said, not what political position it takes. This is not bias detection. The listener decides for themselves; you report what the words did.
 
-You get the band, the score, and the scored lines. Say WHY the listen earned its band by naming the speaker's own words that set it. Quote at least one phrase of three or more words exactly as it appears in one of the lines. If the band is Proportionate or Grounded, say what kept it level; if it is higher, say what pushed it up.
+YOU DO NOT REPORT A SCORE. The number is computed from the five dimensions and the flags you return. Score each dimension honestly on its own; do not aim at a total.
 
-The listener decides for themselves. State what the words did; never tell the listener what to think of the speaker.
+The transcript comes from live speech recognition: lines can be broken, run together or misheard. Judge the speech as a whole, as a listener would hear it. A thought split across lines is one thought.
 
-One sentence, plain words, under 35 words. No em dashes. No contractions. Do not summarize the news.
+QUOTED SPEECH IS SILOED. Words the speaker attributes to someone else ("quote", "he said", "they say") are not the speaker's framing. Only the speaker's own words move the dimensions.
 
-Call report_why once.
+THE FIVE DIMENSIONS (each 1.0-5.0, one decimal). Use the anchors; a 4 is a normal score for speech that earns it.
+
+1. framing (HIGH WEIGHT): how the speaker frames the subject overall.
+   1 = states what is happening in neutral terms. 2 = a mild angle. 3 = verdict nouns, judging adjectives, catastrophizing or win-lose framing. 4 = tells the audience how to feel about the subject before giving them anything to judge. 5 = the framing is the argument; an alarm.
+2. language (HIGH WEIGHT): intensity of the speaker's own words throughout.
+   1 = plain verbs, no modifier doing emotional work. 2 = an occasional warm word. 3 = recurring loaded modifiers, violence or war metaphor applied to politics. 4 = contempt or alarm carried throughout, epithets for one side, absolutes ("never", "always", "the worst ever"). 5 = almost every line carries a charge.
+3. sourcing (MEDIUM): balance on CONTESTED claims. First ask whether the speech advances a contested claim at all. If not, 1 or 2. If it does: 1 = the other side is fairly represented, 3 = the other side is a caricature or an aside, 4 = the other side is absent or only mocked, 5 = one side plus unsupported inflammatory claims.
+   BINDING: if one_sided_sourcing is false, sourcing must be 1.0-2.0.
+4. fallacies (MEDIUM): how much the reasoning depends on appeal to fear, ad hominem, false dilemma, slippery slope, straw man, whataboutism, cherry-picking, anecdote as evidence, bandwagon. Count distinct ones in fallacy_count.
+   BINDING: if fallacy_count is 0, fallacies must be 1.0-2.0.
+5. structure (MEDIUM): repetition of alarming points, escalation, grievance before facts, us-versus-them arranged for effect.
+
+THE FLAGS:
+- loaded_framing: true if the speaker's framing does work beyond stating what is happening (verdicts, catastrophizing, win-lose).
+- emotional_open: true if the speech puts alarm, grievance or an enemy before any fact.
+- fallacy_count: distinct fallacies in the speaker's own reasoning.
+- one_sided_sourcing: true only if a contested claim is advanced with the other side absent or only mocked.
+- advocacy_speech: true for a rally, stump speech, campaign or advocacy speech, made to persuade (the site's opinion-column floor).
+
+USE THE WHOLE SCALE. A campaign rally that attacks opponents with epithets is routinely 3.5-4.5. A calm briefing is 1.0-2.0. Do not average toward the middle.
+
+why: one sentence, under 35 words, saying what set the score, quoting at least one phrase of three or more words exactly as it appears in the transcript. Plain words. No em dashes. No contractions. Never tell the listener what to think of the speaker.
+
+Call report_verdict once.
 `.trim();
 
-export const WHY_TOOL = {
-  name: "report_why",
-  description: "Report the one-sentence Why.",
+export const VERDICT_TOOL = {
+  name: "report_verdict",
+  description: "Report the dimensions, flags and Why for the whole speech.",
   input_schema: {
     type: "object",
-    properties: { why: { type: "string", description: "One sentence quoting at least one three-word phrase from the lines." } },
-    required: ["why"],
+    properties: {
+      framing: { type: "number", description: "1.0-5.0" },
+      language: { type: "number", description: "1.0-5.0" },
+      sourcing: { type: "number", description: "1.0-5.0" },
+      fallacies: { type: "number", description: "1.0-5.0" },
+      structure: { type: "number", description: "1.0-5.0" },
+      loaded_framing: { type: "boolean" },
+      emotional_open: { type: "boolean" },
+      fallacy_count: { type: "integer" },
+      one_sided_sourcing: { type: "boolean" },
+      advocacy_speech: { type: "boolean" },
+      why: { type: "string", description: "One sentence quoting at least three consecutive words from the transcript." },
+    },
+    required: ["framing", "language", "sourcing", "fallacies", "structure", "loaded_framing", "emotional_open", "fallacy_count", "one_sided_sourcing", "advocacy_speech", "why"],
   },
 } as const;

@@ -5,10 +5,11 @@
 import { checkPasscode, hasValidSession, issueSessionCookie } from "./auth.ts";
 import { DEEPGRAM_TOKEN_TTL_SECONDS, grantDeepgramToken, type DeepgramToken } from "./deepgram.ts";
 import { anthropicCostUsd, deepgramCostUsd, DEEPGRAM_USD_PER_MIN, SPEND_CAP_USD, SPEND_WARN_USD } from "./prices.ts";
-import { acceptCorrection, buildRequest, MAX_SENTENCE_CHARS, realAnthropic, validateToolOutput, type CallAnthropic } from "./score.ts";
+import { acceptCorrection, buildRequest, parseContext, MAX_SENTENCE_CHARS, realAnthropic, validateToolOutput, type CallAnthropic } from "./score.ts";
 import { ledgerFor, spendState, type SpendLedger, type SpendStore } from "./spend.ts";
 import { isLocalHost, stubAnthropic } from "./stub.ts";
-import { buildWhyRequest, parseLines, readWhy, summarize, whyQuotesALine } from "./synopsis.ts";
+import { buildVerdictRequest, parseLines, parseTranscript, summarize, verdictInput, whyQuotesALine } from "./synopsis.ts";
+import { computeVerdict, parseVerdict, type Verdict } from "./verdict.ts";
 
 export interface Env {
   METER_KV: SpendStore;
@@ -126,7 +127,7 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
 
       let response;
       try {
-        response = await deps.anthropic(buildRequest(text));
+        response = await deps.anthropic(buildRequest(text, parseContext(body?.context)));
       } catch (err) {
         deps.log({ event: "score_call_failed", text, error: String(err) });
         return json({ error: "scorer unavailable", dropped: true }, 502);
@@ -147,6 +148,8 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         text: shown,
         heard: text,
         claim: valid.claim,
+        // Only meaningful when there was a previous line to continue.
+        continues: valid.continues && parseContext(body?.context).length > 0,
         score: valid.score,
         reason: valid.reason,
         cost_usd: cost,
@@ -157,33 +160,44 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
     if (path === "/api/synopsis" && request.method === "POST") {
       const body = await readJson(request);
       const summary = summarize(parseLines(body?.lines));
-      if (!summary) return json({ summary: null });
+      if (!summary) return json({ summary: null, verdict: null, why: null });
+      const transcript = parseTranscript(body?.transcript);
 
       const before = await deps.ledger.total();
-      // Over budget the numbers still show; only the model-written Why is skipped.
-      if (before >= SPEND_CAP_USD) return json({ summary, why: null, budget: true, ...spendState(before) });
+      // Over budget the line numbers still show; the model-scored verdict is skipped.
+      if (before >= SPEND_CAP_USD || transcript.length === 0) {
+        return json({ summary, verdict: null, why: null, budget: before >= SPEND_CAP_USD, ...spendState(before) });
+      }
 
-      const proving = [...summary.hottest, ...summary.calmest];
+      let verdict: (Verdict & { dims: unknown }) | null = null;
       let why: string | null = null;
       let cost = 0;
-      for (const retry of [false, true]) {
+      let problem: string | null = null;
+      for (let attempt = 0; attempt < 2 && !(verdict && why); attempt++) {
         let response;
         try {
-          response = await deps.anthropic(buildWhyRequest(summary, retry));
+          response = await deps.anthropic(buildVerdictRequest(transcript, problem));
         } catch (err) {
-          deps.log({ event: "why_call_failed", error: String(err) });
+          deps.log({ event: "verdict_call_failed", error: String(err) });
           break;
         }
         cost += anthropicCostUsd(response.usage);
-        const candidate = readWhy(response);
-        if (candidate && whyQuotesALine(candidate, proving)) {
-          why = candidate;
-          break;
+        const parsed = parseVerdict(verdictInput(response));
+        if (!parsed.ok) {
+          problem = parsed.problem;
+          deps.log({ event: "verdict_refused", attempt, problem });
+          continue;
         }
-        deps.log({ event: "why_rejected", retry, candidate });
+        // A good verdict from an earlier try is kept; a retry only improves the Why.
+        if (!verdict) verdict = { ...computeVerdict(parsed.value.dims, parsed.value.flags), dims: parsed.value.dims };
+        if (whyQuotesALine(parsed.value.why, transcript)) why = parsed.value.why;
+        else {
+          problem = "why did not quote three consecutive words of the transcript";
+          deps.log({ event: "why_rejected", attempt, candidate: parsed.value.why });
+        }
       }
       deps.waitUntil(deps.ledger.charge(cost));
-      return json({ summary, why, cost_usd: cost, ...spendState(before + cost) });
+      return json({ summary, verdict, why, cost_usd: cost, ...spendState(before + cost) });
     }
 
     return json({ error: "not found" }, 404);

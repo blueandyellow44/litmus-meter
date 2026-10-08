@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { handle } from "../server/router.ts";
 import { acceptCorrection, validateToolOutput } from "../server/score.ts";
 import { summarize, whyQuotesALine, type ScoredLine } from "../server/synopsis.ts";
+import { computeVerdict, parseVerdict } from "../server/verdict.ts";
 import { env, makeDeps, MemoryStore, PASSCODE, req } from "./helpers.ts";
 import { SPEND_KEY } from "../server/spend.ts";
 import type { AnthropicResponse } from "../server/score.ts";
@@ -45,12 +46,36 @@ describe("summarize", () => {
 });
 
 describe("why must quote a line", () => {
-  const lines = [line(0, 4.0, "We will knock out their whole navy tonight.")];
+  const lines = ["We will knock out their whole navy tonight."];
   it("passes with three consecutive words, ignoring case and punctuation", () => {
     expect(whyQuotesALine('The heat came from "knock out their" navy talk.', lines)).toBe(true);
   });
   it("fails without them", () => {
     expect(whyQuotesALine("The speaker used military language.", lines)).toBe(false);
+  });
+});
+
+describe("whole-speech verdict, the site's composite", () => {
+  const flags = { loadedFraming: false, emotionalOpen: false, fallacyCount: 0, oneSidedSourcing: false, advocacySpeech: false };
+  it("weights framing and language double, like headline and language on the site", () => {
+    // (2*3 + 2*4 + 2 + 2 + 2) / 7 = 20/7 = 2.857 -> 2.9
+    expect(computeVerdict({ framing: 3, language: 4, sourcing: 2, fallacies: 2, structure: 2 }, flags).score).toBe(2.9);
+  });
+  it("applies the site's floors: fallacies, one-sided sourcing, the pair floors, advocacy", () => {
+    const calm = { framing: 1, language: 1, sourcing: 1, fallacies: 1, structure: 1 };
+    expect(computeVerdict(calm, { ...flags, fallacyCount: 3 }).raised).toContain("3 distinct logical fallacies");
+    expect(computeVerdict(calm, { ...flags, loadedFraming: true, emotionalOpen: true }).score).toBe(3.5);
+    expect(computeVerdict({ ...calm, framing: 4.5, language: 4.5 }, flags).score).toBe(4.5);
+    expect(computeVerdict(calm, { ...flags, advocacySpeech: true }).score).toBe(2.5);
+    expect(computeVerdict(calm, flags).score).toBe(1.0);
+  });
+  it("refuses answers that break the binding rules, like the site", () => {
+    const base = { framing: 3, language: 3, sourcing: 2, fallacies: 2, structure: 2, loaded_framing: false, emotional_open: false, fallacy_count: 0, one_sided_sourcing: false, advocacy_speech: true, why: "x" };
+    expect(parseVerdict(base).ok).toBe(true);
+    expect(parseVerdict({ ...base, sourcing: 3 }).ok).toBe(false);
+    expect(parseVerdict({ ...base, fallacies: 2.5 }).ok).toBe(false);
+    expect(parseVerdict({ ...base, framing: 6 }).ok).toBe(false);
+    expect(parseVerdict({ ...base, fallacy_count: 1.5 }).ok).toBe(false);
   });
 });
 
@@ -60,8 +85,14 @@ describe("synopsis route", () => {
     const res = await handle(req("/api/login", { method: "POST", body: JSON.stringify({ passcode: PASSCODE }) }), env(store), deps);
     return res.headers.get("set-cookie")!.split(";")[0]!;
   }
-  const body = JSON.stringify({ lines: [line(0, 1.0), line(1, 4.4, "They are destroying this great country of ours."), line(2, 1.2)] });
-  const why = (text: string): AnthropicResponse => ({ content: [{ type: "tool_use", name: "report_why", input: { why: text } }], usage: { input_tokens: 500, output_tokens: 30 } });
+  const lines = [line(0, 1.0), line(1, 4.4, "They are destroying this great country of ours."), line(2, 1.2)];
+  const transcript = ["Line number 0 says a thing.", "They are destroying this great country of ours.", "Line number 2 says a thing."];
+  const body = JSON.stringify({ lines, transcript });
+  const verdict = (over: Record<string, unknown> = {}): AnthropicResponse => ({
+    content: [{ type: "tool_use", name: "report_verdict", input: { framing: 4, language: 4, sourcing: 2, fallacies: 2.5, structure: 3, loaded_framing: true, emotional_open: false, fallacy_count: 1, one_sided_sourcing: false, advocacy_speech: true, why: 'Words like "destroying this great country" set it.', ...over } }],
+    usage: { input_tokens: 2000, output_tokens: 120 },
+  });
+  type R = { summary: { score: number } | null; verdict: { score: number; band: string } | null; why: string | null };
 
   it("is refused without a cookie", async () => {
     const store = new MemoryStore();
@@ -69,43 +100,71 @@ describe("synopsis route", () => {
     expect((await handle(req("/api/synopsis", { method: "POST", body }), env(store), deps)).status).toBe(401);
   });
 
-  it("keeps a Why that quotes a line", async () => {
+  it("leads with the whole-speech verdict computed in code, and keeps the line average", async () => {
     const store = new MemoryStore();
     const cookie = await signIn(store);
-    const h = makeDeps(store, { anthropic: async () => why('Mostly level, but "destroying this great country" pushed it up.') });
-    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body }), env(store), h.deps)).json()) as { why: string; summary: { band: string; score: number } };
-    expect(r.summary.score).toBe(2.2);
+    const h = makeDeps(store, { anthropic: async () => verdict() });
+    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body }), env(store), h.deps)).json()) as R;
+    // (2*4 + 2*4 + 2 + 2.5 + 3) / 7 = 23.5/7 = 3.357 -> 3.4
+    expect(r.verdict).toMatchObject({ score: 3.4, band: "Mixed Signals" });
+    expect(r.summary!.score).toBe(2.2);
     expect(r.why).toContain("destroying this great country");
   });
 
-  it("retries once, then shows no Why rather than an unsupported one", async () => {
+  it("a refused verdict is retried once with the problem named", async () => {
     const store = new MemoryStore();
     const cookie = await signIn(store);
-    let calls = 0;
-    const h = makeDeps(store, { anthropic: async () => (calls++, why("The speaker was very dramatic.")) });
-    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body }), env(store), h.deps)).json()) as { why: string | null };
-    expect(calls).toBe(2);
-    expect(r.why).toBeNull();
-    expect(h.logs.filter((l) => l.event === "why_rejected")).toHaveLength(2);
+    const seen: string[] = [];
+    let n = 0;
+    const h = makeDeps(store, {
+      anthropic: async (b) => {
+        seen.push(JSON.stringify(b));
+        return n++ === 0 ? verdict({ sourcing: 3.5 }) : verdict();
+      },
+    });
+    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body }), env(store), h.deps)).json()) as R;
+    expect(n).toBe(2);
+    expect(seen[1]).toContain("sourcing above 2.0");
+    expect(r.verdict!.score).toBe(3.4);
   });
 
-  it("at the $50 cap still returns the numbers but makes no model call", async () => {
+  it("a Why that quotes nothing is retried, then left out; the verdict still shows", async () => {
+    const store = new MemoryStore();
+    const cookie = await signIn(store);
+    let n = 0;
+    const h = makeDeps(store, { anthropic: async () => (n++, verdict({ why: "The speaker was very dramatic." })) });
+    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body }), env(store), h.deps)).json()) as R;
+    expect(n).toBe(2);
+    expect(r.why).toBeNull();
+    expect(r.verdict!.score).toBe(3.4);
+  });
+
+  it("two refusals fall back to the line average, labelled as such", async () => {
+    const store = new MemoryStore();
+    const cookie = await signIn(store);
+    const h = makeDeps(store, { anthropic: async () => verdict({ framing: 9 }) });
+    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body }), env(store), h.deps)).json()) as R;
+    expect(r.verdict).toBeNull();
+    expect(r.summary!.score).toBe(2.2);
+  });
+
+  it("at the $50 cap returns the line numbers and makes no model call", async () => {
     const store = new MemoryStore();
     store.map.set(SPEND_KEY, "50");
     const cookie = await signIn(store);
     let calls = 0;
-    const h = makeDeps(store, { anthropic: async () => (calls++, why("x")) });
-    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body }), env(store), h.deps)).json()) as { why: null; summary: object };
+    const h = makeDeps(store, { anthropic: async () => (calls++, verdict()) });
+    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body }), env(store), h.deps)).json()) as R;
     expect(calls).toBe(0);
+    expect(r.verdict).toBeNull();
     expect(r.summary).toBeTruthy();
-    expect(r.why).toBeNull();
   });
 
   it("answers summary null when fewer than three lines made a claim", async () => {
     const store = new MemoryStore();
     const cookie = await signIn(store);
     const h = makeDeps(store);
-    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body: JSON.stringify({ lines: [line(0, 2)] }) }), env(store), h.deps)).json()) as { summary: null };
+    const r = (await (await handle(req("/api/synopsis", { method: "POST", cookie, body: JSON.stringify({ lines: [line(0, 2)], transcript }) }), env(store), h.deps)).json()) as R;
     expect(r.summary).toBeNull();
   });
 });

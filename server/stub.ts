@@ -5,7 +5,7 @@
 // About one sentence in eleven comes back malformed on purpose, to exercise
 // the drop path.
 
-import { SCORE_TOOL, WHY_TOOL } from "./rubric.ts";
+import { SCORE_TOOL, VERDICT_TOOL } from "./rubric.ts";
 import type { AnthropicResponse, CallAnthropic } from "./score.ts";
 
 export function isLocalHost(url: URL): boolean {
@@ -36,15 +36,28 @@ const LATENCY_SPREAD_MS = 800;
 export function stubAnthropic(sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): CallAnthropic {
   return async (body) => {
     const req = body as { tools: Array<{ name: string }>; messages: Array<{ content: string }> };
-    const sentence = String(req.messages[0]?.content ?? "");
+    const content = String(req.messages[0]?.content ?? "");
+    const sentence = content.includes("Score this line:\n") ? content.split("Score this line:\n")[1]! : content;
     const h = hash(sentence);
-    if (req.tools[0]?.name === WHY_TOOL.name) {
-      await sleep(900);
-      const hot = (JSON.parse(sentence.split("\n\n")[0]!) as { hottest_lines: Array<{ text: string }> }).hottest_lines[0]?.text ?? "";
-      const quote = hot.split(" ").slice(0, 5).join(" ");
+    if (req.tools[0]?.name === VERDICT_TOOL.name) {
+      await sleep(1500);
+      const lines = content.split("\n").slice(1);
+      const hotWord = new RegExp(HOT.source, "i");
+      const hot = lines.filter((l) => hotWord.test(l));
+      const heat = Math.min(4.5, 1.5 + hot.length * 0.4);
+      const quote = (hot[0] ?? lines[0] ?? "").split(" ").slice(0, 5).join(" ");
       return {
-        content: [{ type: "tool_use", name: WHY_TOOL.name, input: { why: `Most lines were plain statements, and the heat came from lines like "${quote}".` } }],
-        usage: { input_tokens: 600, output_tokens: 40 },
+        content: [{
+          type: "tool_use",
+          name: VERDICT_TOOL.name,
+          input: {
+            framing: heat, language: heat, sourcing: 2.0, fallacies: hot.length ? 2.5 : 1.5, structure: heat - 0.5,
+            loaded_framing: hot.length > 2, emotional_open: false, fallacy_count: hot.length ? 1 : 0,
+            one_sided_sourcing: false, advocacy_speech: false,
+            why: `The heat came from lines like "${quote}".`,
+          },
+        }],
+        usage: { input_tokens: 2500, output_tokens: 150 },
       };
     }
     await sleep(LATENCY_MIN_MS + (h % LATENCY_SPREAD_MS));
@@ -55,6 +68,8 @@ export function stubAnthropic(sleep: (ms: number) => Promise<void> = (ms) => new
     const { score, reason } = fakeScore(sentence);
     const claim = sentence.split(/\s+/).length >= 4;
     const text = sentence.replace(/Strait of Hormones/i, "Strait of Hormuz");
-    return { content: [{ type: "tool_use", name: SCORE_TOOL.name, input: { text, claim, score, reason } }], usage };
+    // A line that starts lowercase picks up where the last one broke off.
+    const continues = /^[a-z]/.test(sentence) && content.includes("Score this line:");
+    return { content: [{ type: "tool_use", name: SCORE_TOOL.name, input: { text, claim, score, reason, continues } }], usage };
   };
 }

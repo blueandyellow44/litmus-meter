@@ -49,8 +49,8 @@ export async function listenTick(seconds: number): Promise<SpendFields & { cost_
   return res.json();
 }
 
-export async function scoreSentence(text: string): Promise<ScoreResult> {
-  const res = await post("/api/score", { text });
+export async function scoreSentence(text: string, context: string[] = []): Promise<ScoreResult> {
+  const res = await post("/api/score", { text, context });
   if (res.status === 402) return { kind: "budget" };
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (res.ok) {
@@ -60,6 +60,7 @@ export async function scoreSentence(text: string): Promise<ScoreResult> {
       reason: String(body.reason),
       claim: body.claim !== false,
       text: typeof body.text === "string" && body.text ? body.text : text,
+      continues: body.continues === true,
       costUsd: Number(body.cost_usd) || 0,
       warn: body.warn === true,
     };
@@ -84,11 +85,12 @@ export interface Synopsis {
     hottest: SynopsisLine[];
     calmest: SynopsisLine[];
   } | null;
+  verdict: { score: number; band: string; raised: string[] } | null;
   why: string | null;
 }
 
-export async function synopsis(lines: SynopsisLine[]): Promise<Synopsis> {
-  const res = await post("/api/synopsis", { lines });
+export async function synopsis(lines: SynopsisLine[], transcript: string[]): Promise<Synopsis> {
+  const res = await post("/api/synopsis", { lines, transcript });
   if (!res.ok) throw new Error(`synopsis failed (${res.status})`);
   return res.json();
 }

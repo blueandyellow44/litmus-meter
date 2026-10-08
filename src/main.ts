@@ -186,12 +186,19 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
     .reverse()
     .map((e) => ({ seq: e.seq, text: e.text, score: e.score!, reason: e.reason ?? "" }));
   let result: api.Synopsis;
+  // One retry: a dropped connection (venue wifi, or the local dev proxy, seen
+  // 2026-10-07) should not cost the listener the verdict.
   try {
-    result = await api.synopsis(lines);
-  } catch (err) {
-    el.synVerdict.textContent = "The summary could not be made.";
-    console.warn(err);
-    return;
+    result = await api.synopsis(lines, pipeline.store.transcript());
+  } catch (first) {
+    console.warn("synopsis failed, retrying once", first);
+    try {
+      result = await api.synopsis(lines, pipeline.store.transcript());
+    } catch (err) {
+      el.synVerdict.textContent = "The summary could not be made.";
+      console.warn(err);
+      return;
+    }
   }
   const s = result.summary;
   if (!s) {
@@ -199,7 +206,10 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
     el.synWhy.textContent = `Fewer than three lines made a claim.`;
     return;
   }
-  el.synVerdict.textContent = `${s.band}, ${s.score.toFixed(1)}`;
+  const v = result.verdict;
+  // Two numbers, roles named: the whole speech scored the site's way leads;
+  // the plain line average follows so the listener can weigh both.
+  el.synVerdict.textContent = v ? `${v.band}, ${v.score.toFixed(1)}` : `${s.band}, ${s.score.toFixed(1)} (line average)`;
   // Retry-then-none, as on the site: no Why line beats a Why that cites nothing.
   el.synWhy.textContent = result.why ?? "";
   el.synWhy.hidden = !result.why;
@@ -207,7 +217,10 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
     .filter(([, n]) => n > 0)
     .map(([band, n]) => `${n} ${band}`)
     .join(", ");
-  el.synCounts.textContent = `The average of ${s.lines} lines that made a claim: ${counts}.`;
+  const raised = v && v.raised.length ? ` Raised for ${v.raised.join("; ")}.` : "";
+  el.synCounts.textContent = v
+    ? `Whole speech scored the LITMUS way.${raised} Line by line it averaged ${s.score.toFixed(1)} over ${s.lines} scored lines: ${counts}.`
+    : `The whole-speech score could not be made, so this is the average of ${s.lines} scored lines: ${counts}.`;
   el.synHot.replaceChildren(...s.hottest.map(proofItem));
   el.synCalm.replaceChildren(...s.calmest.map(proofItem));
   el.synopsis.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -296,7 +309,14 @@ async function startSession(source: "tab" | "mic"): Promise<void> {
   const ctx = session?.stub ? null : new AudioContext();
   const pipeline = new Pipeline(api.scoreSentence, {
     interim: (t) => setText(el.interim, t),
-    changed: (seq) => renderAfterScore(pipeline, seq),
+    changed: (seq, mergedSeq) => {
+      // The folded-in line leaves the list; the merged line takes its place.
+      if (mergedSeq !== undefined) {
+        listItems.get(mergedSeq)?.remove();
+        listItems.delete(mergedSeq);
+      }
+      renderAfterScore(pipeline, seq);
+    },
     // Charged to this listen even when the answer lands after Stop.
     cost: (usd) => {
       r.sessionCost += usd;

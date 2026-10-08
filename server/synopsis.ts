@@ -1,19 +1,20 @@
-// End-of-listen synopsis. Everything numeric is decided here, in code:
-// the score is the plain average of the lines that make a claim (Max,
-// 2026-10-07: "whatever is most honest ... we do not manipulate them"), the
-// band comes from the rubric's table, and the proving lines are picked by
-// rule, hot AND calm, so the listener sees the evidence on both sides. The
-// model writes only the one-sentence Why, and that sentence must quote one of
-// the proving lines or it is not shown (the site's "retry, then none").
+// End-of-listen synopsis. Two numbers, roles named:
+//   - the VERDICT: the whole transcript scored the website's way (Max,
+//     2026-10-07), dimensions from the model, number computed in
+//     server/verdict.ts;
+//   - the LINE AVERAGE: the plain average of the scored lines, shown second so
+//     the listener can see both and judge ("we provide a tool -- we do not
+//     manipulate them").
+// The proving lines are picked by rule, hot AND calm. The Why must quote the
+// transcript or it is not shown (the site's "retry, then none").
 
-import { BANDS, SYNOPSIS_PROMPT, WHY_TOOL } from "./rubric.ts";
+import { BANDS, VERDICT_PROMPT, VERDICT_TOOL } from "./rubric.ts";
 import { SCORER_MODEL, type AnthropicResponse } from "./score.ts";
 
 export const MIN_CLAIM_LINES = 3;
 const HOT_LINES = 3;
 const CALM_LINES = 2;
 const WHY_QUOTE_WORDS = 3;
-const MAX_WHY_CHARS = 400;
 
 export interface ScoredLine {
   seq: number;
@@ -59,10 +60,10 @@ function normalize(s: string): string {
 }
 
 // True when `why` contains WHY_QUOTE_WORDS consecutive words of some line.
-export function whyQuotesALine(why: string, lines: ScoredLine[]): boolean {
+export function whyQuotesALine(why: string, texts: string[]): boolean {
   const w = ` ${normalize(why)} `;
-  return lines.some((l) => {
-    const words = normalize(l.text).split(" ");
+  return texts.some((t) => {
+    const words = normalize(t).split(" ");
     for (let i = 0; i + WHY_QUOTE_WORDS <= words.length; i++) {
       if (w.includes(` ${words.slice(i, i + WHY_QUOTE_WORDS).join(" ")} `)) return true;
     }
@@ -70,35 +71,39 @@ export function whyQuotesALine(why: string, lines: ScoredLine[]): boolean {
   });
 }
 
-export function buildWhyRequest(summary: Summary, retry: boolean) {
-  const proving = [...summary.hottest, ...summary.calmest];
-  const payload = {
-    band: summary.band,
-    score: summary.score,
-    lines_scored: summary.lines,
-    lines_per_band: summary.counts,
-    hottest_lines: summary.hottest.map((l) => ({ text: l.text, score: l.score })),
-    calmest_lines: summary.calmest.map((l) => ({ text: l.text, score: l.score })),
-  };
-  const note = retry
-    ? `\n\nYour last answer did not quote any line. Quote three or more consecutive words exactly from one of these lines: ${proving.map((l) => JSON.stringify(l.text)).join(", ")}`
+const MAX_TRANSCRIPT_CHARS = 60_000;
+
+export function parseTranscript(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  let size = 0;
+  for (const t of raw) {
+    if (typeof t !== "string" || t.trim() === "") continue;
+    const line = t.trim().slice(0, 1000);
+    if (size + line.length > MAX_TRANSCRIPT_CHARS) break;
+    out.push(line);
+    size += line.length + 1;
+  }
+  return out;
+}
+
+export function buildVerdictRequest(transcript: string[], retryProblem: string | null) {
+  const note = retryProblem
+    ? `\n\nYour last answer was refused: ${retryProblem}. Answer again, following the binding rules and quoting the transcript exactly in why.`
     : "";
   return {
     model: SCORER_MODEL,
-    max_tokens: 200,
+    max_tokens: 400,
     temperature: 0,
-    system: SYNOPSIS_PROMPT,
-    tools: [WHY_TOOL],
-    tool_choice: { type: "tool", name: WHY_TOOL.name },
-    messages: [{ role: "user", content: JSON.stringify(payload) + note }],
+    system: VERDICT_PROMPT,
+    tools: [VERDICT_TOOL],
+    tool_choice: { type: "tool", name: VERDICT_TOOL.name },
+    messages: [{ role: "user", content: `Transcript, one line per recognized sentence:\n${transcript.join("\n")}${note}` }],
   };
 }
 
-export function readWhy(response: AnthropicResponse): string | null {
-  const input = response.content?.find((c) => c.type === "tool_use" && c.name === WHY_TOOL.name)?.input;
-  const why = input && typeof input === "object" ? (input as Record<string, unknown>).why : null;
-  if (typeof why !== "string" || why.trim() === "") return null;
-  return why.trim().replace(/—/g, ", ").slice(0, MAX_WHY_CHARS);
+export function verdictInput(response: AnthropicResponse): unknown {
+  return response.content?.find((c) => c.type === "tool_use" && c.name === VERDICT_TOOL.name)?.input ?? null;
 }
 
 // Accepts only well-formed lines from the client; anything else is dropped

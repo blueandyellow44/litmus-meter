@@ -11,7 +11,7 @@ export interface Entry {
   text: string; // what the screen shows: heard text, or a guarded proper-noun fix
   heard: string; // exactly what speech recognition returned
   finalAt: number; // ms, when the final transcript that completed it arrived
-  status: "pending" | "scored" | "noclaim" | "dropped";
+  status: "pending" | "scored" | "noclaim" | "dropped" | "merged";
   score?: number;
   reason?: string;
   lagMs?: number;
@@ -20,7 +20,6 @@ export interface Entry {
 export class MeterStore {
   private entries = new Map<number, Entry>();
   private nextSeq = 0;
-  private hottestSeq: number | null = null;
 
   add(text: string, finalAt: number): Entry {
     const e: Entry = { seq: this.nextSeq++, text, heard: text, finalAt, status: "pending" };
@@ -39,10 +38,30 @@ export class MeterStore {
     }
     e.status = "scored";
     e.score = score;
-    const hot = this.hottest();
-    // Strictly hotter replaces it, so the first line to reach a score keeps it.
-    if (!hot || score > hot.score! || (score === hot.score! && seq < hot.seq)) this.hottestSeq = seq;
     return e;
+  }
+
+  // The line before `seq` that this one finished: the latest earlier entry
+  // still on screen or in flight. Null when there is nothing to continue.
+  previousOf(seq: number): Entry | null {
+    for (let s = seq - 1; s >= 0; s--) {
+      const e = this.entries.get(s);
+      if (e && e.status !== "dropped" && e.status !== "merged") return e;
+    }
+    return null;
+  }
+
+  // Self-correcting lines (Max, 2026-10-07): the previous line is folded into
+  // this one, which carries the whole thought and the score for it. The
+  // previous entry stops counting anywhere; if its own score arrives later,
+  // resolve() ignores it because it is no longer pending.
+  merge(prevSeq: number, seq: number): void {
+    const prev = this.entries.get(prevSeq);
+    const cur = this.entries.get(seq);
+    if (!prev || !cur || prevSeq >= seq) return;
+    cur.text = `${prev.text} ${cur.text}`;
+    cur.heard = `${prev.heard} ${cur.heard}`;
+    prev.status = "merged";
   }
 
   drop(seq: number): void {
@@ -76,8 +95,24 @@ export class MeterStore {
     return this.scored()[0] ?? null;
   }
 
+  // Computed fresh because a merge can retire the line that was hottest.
+  // Ties go to the earlier line, so the pick never depends on arrival order.
   hottest(): Entry | null {
-    return this.hottestSeq === null ? null : (this.entries.get(this.hottestSeq) ?? null);
+    let hot: Entry | null = null;
+    for (const e of this.scored()) {
+      if (!hot || e.score! > hot.score! || (e.score === hot.score && e.seq < hot.seq)) hot = e;
+    }
+    return hot;
+  }
+
+  // Everything the speaker said, in order, for the whole-listen verdict.
+  // A merged line is skipped because its words live on in the line that
+  // absorbed it.
+  transcript(): string[] {
+    return [...this.entries.values()]
+      .filter((e) => e.status !== "merged" && e.status !== "pending")
+      .sort((a, b) => a.seq - b.seq)
+      .map((e) => e.text);
   }
 
   pendingCount(): number {

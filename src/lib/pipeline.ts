@@ -8,15 +8,17 @@ import { MeterStore } from "./meterStore.ts";
 import { SentenceAssembler } from "./sentences.ts";
 
 export type ScoreResult =
-  | { kind: "scored"; score: number; reason: string; claim: boolean; text: string; costUsd: number; warn: boolean }
+  | { kind: "scored"; score: number; reason: string; claim: boolean; text: string; continues: boolean; costUsd: number; warn: boolean }
   | { kind: "dropped"; costUsd: number; warn: boolean }
   | { kind: "budget" };
 
-export type ScoreFn = (text: string) => Promise<ScoreResult>;
+// `context` is the speaker's previous one or two lines, sent so the scorer
+// knows what "that" refers to (Max, 2026-10-07).
+export type ScoreFn = (text: string, context: string[]) => Promise<ScoreResult>;
 
 export interface PipelineHooks {
   interim: (text: string) => void;
-  changed: (resolvedSeq: number | null) => void;
+  changed: (resolvedSeq: number | null, mergedSeq?: number) => void;
   cost: (usd: number) => void;
   warn: () => void;
   budget: () => void;
@@ -34,6 +36,7 @@ export class Pipeline {
   private readonly assembler = new SentenceAssembler();
   private stopped = false;
   private inFlight = new Set<Promise<void>>();
+  private recent: string[] = [];
 
   constructor(
     private readonly score: ScoreFn,
@@ -76,15 +79,17 @@ export class Pipeline {
     const finalAt = this.now();
     for (const text of sentences) {
       const entry = this.store.add(text, finalAt);
-      const p = this.scoreOne(entry.seq, text).finally(() => this.inFlight.delete(p));
+      const context = this.recent.slice(-2);
+      this.recent = [...this.recent.slice(-1), text];
+      const p = this.scoreOne(entry.seq, text, context).finally(() => this.inFlight.delete(p));
       this.inFlight.add(p);
     }
   }
 
-  private async scoreOne(seq: number, text: string): Promise<void> {
+  private async scoreOne(seq: number, text: string, context: string[]): Promise<void> {
     let result: ScoreResult;
     try {
-      result = await this.score(text);
+      result = await this.score(text, context);
     } catch (err) {
       console.warn("score request failed; sentence dropped", { seq, text, err });
       this.store.drop(seq);
@@ -103,7 +108,18 @@ export class Pipeline {
       this.store.drop(seq);
       return;
     }
-    this.store.resolve(seq, result.score, result.reason, result.claim, result.text);
-    this.hooks.changed(seq);
+    // Self-correcting lines: when this line finishes the previous thought, the
+    // previous entry folds into this one, and this score covers the whole.
+    let mergedSeq: number | undefined;
+    if (result.continues) {
+      const prev = this.store.previousOf(seq);
+      if (prev) {
+        mergedSeq = prev.seq;
+        this.store.merge(prev.seq, seq);
+      }
+    }
+    const shown = mergedSeq === undefined ? result.text : `${this.store.get(seq)!.text.slice(0, -text.length)}${result.text}`.trim();
+    this.store.resolve(seq, result.score, result.reason, result.claim, shown);
+    this.hooks.changed(seq, mergedSeq);
   }
 }

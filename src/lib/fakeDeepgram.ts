@@ -19,6 +19,8 @@ const SCRIPT: Array<{ text: string; pause: boolean }> = [
   { text: "Let's be honest, this is the worst betrayal of voters we have ever seen. It is a disgrace.", pause: true },
   { text: "The House is expected to take up the measure on Thursday.", pause: true },
   { text: "Markets closed slightly higher, with the Dow up 0.4 percent.", pause: true },
+  { text: "I stopped them from ever having nukes.", pause: true },
+  { text: "and that was the end of that, a total disaster for them.", pause: true },
   { text: "My dad is.", pause: true },
   { text: "We will take over the Strait of Hormones.", pause: true },
   { text: "This radical agenda is pure chaos and it will never work.", pause: true },

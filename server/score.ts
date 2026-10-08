@@ -18,6 +18,7 @@ export type CallAnthropic = (body: unknown) => Promise<AnthropicResponse>;
 export interface ValidScore {
   text: string;
   claim: boolean;
+  continues: boolean;
   score: number;
   reason: string;
 }
@@ -71,7 +72,17 @@ export function acceptCorrection(heard: string, proposed: string): string {
   return proposed.trim();
 }
 
-export function buildRequest(sentence: string) {
+export const MAX_CONTEXT_LINES = 2;
+const MAX_CONTEXT_CHARS = 500;
+
+// The previous lines ride along as context only (Max, 2026-10-07, reversing
+// the v1 "one sentence only" rule); the line to score is always last and
+// labelled, so the model cannot mistake which words it is judging.
+export function buildRequest(sentence: string, context: string[] = []) {
+  const ctx = context.slice(-MAX_CONTEXT_LINES).map((c) => c.slice(0, MAX_CONTEXT_CHARS));
+  const content = ctx.length
+    ? `Context, the speaker's previous lines (do not score):\n${ctx.map((c) => `- ${c}`).join("\n")}\n\nScore this line:\n${sentence}`
+    : sentence;
   return {
     model: SCORER_MODEL,
     max_tokens: MAX_OUTPUT_TOKENS,
@@ -79,8 +90,13 @@ export function buildRequest(sentence: string) {
     system: SYSTEM_PROMPT,
     tools: [SCORE_TOOL],
     tool_choice: { type: "tool", name: SCORE_TOOL.name },
-    messages: [{ role: "user", content: sentence }],
+    messages: [{ role: "user", content }],
   };
+}
+
+export function parseContext(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((c): c is string => typeof c === "string" && c.trim() !== "").slice(-MAX_CONTEXT_LINES);
 }
 
 export function realAnthropic(apiKey: string): CallAnthropic {
@@ -107,7 +123,7 @@ export function validateToolOutput(response: AnthropicResponse): ValidScore | nu
   const block = response.content?.find((c) => c.type === "tool_use" && c.name === SCORE_TOOL.name);
   const input = block?.input;
   if (!input || typeof input !== "object") return null;
-  const { text, claim, score, reason } = input as Record<string, unknown>;
+  const { text, claim, score, reason, continues } = input as Record<string, unknown>;
   if (typeof text !== "string" || text.trim() === "") return null;
   if (typeof claim !== "boolean") return null;
   if (typeof reason !== "string" || reason.trim() === "") return null;
@@ -116,6 +132,8 @@ export function validateToolOutput(response: AnthropicResponse): ValidScore | nu
   return {
     text: text.trim(),
     claim: claim || score > NOCLAIM_MAX_SCORE,
+    // Optional so an answer without it is still usable: it just does not merge.
+    continues: continues === true,
     score: Math.round(score * 10) / 10,
     reason: reason.trim().slice(0, MAX_REASON_CHARS),
   };

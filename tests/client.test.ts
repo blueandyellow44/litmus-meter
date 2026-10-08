@@ -16,13 +16,13 @@ function deferred<T>() {
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 function harness() {
-  const calls: Array<{ text: string; d: ReturnType<typeof deferred<ScoreResult>> }> = [];
+  const calls: Array<{ text: string; context: string[]; d: ReturnType<typeof deferred<ScoreResult>> }> = [];
   const interims: string[] = [];
   const changed: Array<number | null> = [];
   const p = new Pipeline(
-    (text) => {
+    (text, context) => {
       const d = deferred<ScoreResult>();
-      calls.push({ text, d });
+      calls.push({ text, context, d });
       return d.promise;
     },
     { interim: (t) => interims.push(t), changed: (s) => changed.push(s), cost: () => {}, warn: () => {}, budget: () => {} },
@@ -31,7 +31,7 @@ function harness() {
   return { p, calls, interims, changed };
 }
 
-const scored = (score: number, reason = "r", claim = true, text = ""): ScoreResult => ({ kind: "scored", score, reason, claim, text, costUsd: 0.002, warn: false });
+const scored = (score: number, reason = "r", claim = true, text = "", continues = false): ScoreResult => ({ kind: "scored", score, reason, claim, text, continues, costUsd: 0.002, warn: false });
 
 describe("one scoring call per final sentence, none for interims", () => {
   it("interims update the live line and never score", () => {
@@ -285,5 +285,55 @@ describe("rally speech (live test 2026-10-07)", () => {
     h.p.handleMessage(final("Do you know there's a line", true));
     h.p.handleMessage(final("that's like three, four miles long of people.", true));
     expect(h.calls.map((c) => c.text)).toEqual(["Do you know there's a line that's like three, four miles long of people."]);
+  });
+});
+
+describe("context and self-correcting lines (Max, 2026-10-07)", () => {
+  it("each line is sent with the previous two lines as context", () => {
+    const h = harness();
+    h.p.handleMessage(final("The first line is here. The second line is here. The third line is here."));
+    expect(h.calls.map((c) => c.context)).toEqual([[], ["The first line is here."], ["The first line is here.", "The second line is here."]]);
+  });
+
+  it("a line that finishes the previous thought absorbs it and scores the whole", async () => {
+    const h = harness();
+    h.p.handleMessage(final("I stopped them from ever having nukes."));
+    h.p.handleMessage(final("And that was the end of that."));
+    h.calls[0]!.d.resolve(scored(1.2));
+    await tick();
+    expect(h.p.store.needle()).toBe(1.2);
+    h.calls[1]!.d.resolve(scored(3.4, "whole thought", true, "And that was the end of that.", true));
+    await tick();
+    const lines = h.p.store.scored();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.text).toBe("I stopped them from ever having nukes. And that was the end of that.");
+    expect(lines[0]!.score).toBe(3.4);
+    expect(h.p.store.needle()).toBe(3.4); // the folded line no longer counts
+    expect(h.changed.at(-1)).toBe(1);
+  });
+
+  it("a folded line whose own score lands late is ignored", async () => {
+    const h = harness();
+    h.p.handleMessage(final("They want to take your guns away."));
+    h.p.handleMessage(final("and your freedom with them."));
+    h.calls[1]!.d.resolve(scored(4.2, "r", true, "and your freedom with them.", true));
+    await tick();
+    h.calls[0]!.d.resolve(scored(3.0));
+    await tick();
+    expect(h.p.store.scored().map((e) => e.score)).toEqual([4.2]);
+    expect(h.p.store.get(0)!.status).toBe("merged");
+  });
+
+  it("a merge that retires the hottest line moves the hottest to what replaced it", async () => {
+    const h = harness();
+    h.p.handleMessage(final("This is a total disaster for us."));
+    h.p.handleMessage(final("but we fixed it completely."));
+    h.calls[0]!.d.resolve(scored(4.5));
+    await tick();
+    expect(h.p.store.hottest()?.seq).toBe(0);
+    h.calls[1]!.d.resolve(scored(2.0, "r", true, "but we fixed it completely.", true));
+    await tick();
+    expect(h.p.store.hottest()?.seq).toBe(1);
+    expect(h.p.store.transcript()).toEqual(["This is a total disaster for us. but we fixed it completely."]);
   });
 });
