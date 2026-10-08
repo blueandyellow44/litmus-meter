@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LITMUS Live: visual options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" />
+<style>
+  /* Tokens copied from ~/LITMUS2/litmus-client/src/styles/tokens.css */
+  :root {
+    --ground: #F1F0ED; --surface: #FAF9F7; --ink: #1E1F22; --ink2: #45464B; --ink3: #63646A;
+    --rule: #D9D7D2; --rule-strong: #838488; --tint: #F7E1C4; --hot-line: #B2511E; --cool-line: #75838A;
+    --p1: #C0C9CE; --p2: #B7AE8E; --p3: #C1893C; --p4: #C05A16; --p5: #AD3118;
+    --mark-stroke: rgba(30,31,34,0.55);
+    --serif: "Newsreader", Georgia, serif; --sans: "Instrument Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.5; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .lede { color: var(--ink2); margin: 0 0 8px; }
+  .note { font-size: 13px; color: var(--ink3); margin: 0 0 28px; }
+  section { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 18px 20px; margin: 0 0 22px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); margin-bottom: 4px; }
+  h2 { font-size: 19px; margin: 0 0 4px; }
+  .what { color: var(--ink2); margin: 0 0 14px; font-size: 15px; }
+  .label { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+  .sentence { font-family: var(--serif); font-size: 18px; line-height: 1.4; }
+  button.play { font: inherit; font-weight: 600; font-size: 14px; border: 1px solid var(--ink); background: var(--ink); color: var(--surface); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+
+  /* 1. ribbon */
+  .ribbon { position: relative; height: 150px; border-bottom: 1px solid var(--rule-strong); display: flex; align-items: flex-end; gap: 2px; padding-top: 10px; }
+  .ribbon .bar { flex: 1 1 0; min-width: 4px; border-radius: 4px 4px 0 0; border: 1px solid var(--mark-stroke); border-bottom: none; position: relative; cursor: pointer; transition: height 500ms ease; }
+  .ribbon .bar:hover, .ribbon .bar.on { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .ribbon .nc { background: transparent !important; border-style: dashed; }
+  .bandlines { position: absolute; inset: 10px 0 0 0; pointer-events: none; }
+  .bandlines div { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--rule); font-size: 11px; color: var(--ink3); }
+  .bandlines span { position: absolute; right: 0; top: -15px; background: var(--surface); padding: 0 4px; }
+  .peak { position: absolute; font-size: 12px; color: var(--ink2); white-space: nowrap; transform: translateX(-50%); pointer-events: none; }
+  .ribbon-read { min-height: 64px; margin-top: 10px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink2); margin-top: 10px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--mark-stroke); vertical-align: -2px; margin-right: 5px; }
+
+  /* 2. highlighted words */
+  .live-text { font-family: var(--serif); font-size: 20px; line-height: 1.6; }
+  .hl { background: var(--tint); text-decoration: underline; text-decoration-color: var(--hot-line); text-decoration-thickness: 1.5px; text-underline-offset: .22em; border-radius: 2px; padding: 0 .06em; cursor: help; }
+  .gr { text-decoration: underline; text-decoration-color: var(--cool-line); text-decoration-thickness: 1px; text-underline-offset: .26em; }
+  .quoted { color: var(--ink3); }
+  .why-pop { font-size: 14px; color: var(--ink2); min-height: 22px; margin-top: 8px; font-family: var(--sans); }
+
+  /* 3. devices */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+  .chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule-strong); background: var(--surface); }
+  .chip.f { border-color: var(--hot-line); }
+  .dev-row { padding: 10px 0; border-top: 1px solid var(--rule); }
+  .tally { display: grid; grid-template-columns: 170px 1fr 34px; gap: 6px 10px; align-items: center; margin-top: 14px; }
+  .tally .t-bar { height: 14px; border-radius: 0 4px 4px 0; background: var(--ink2); }
+  .tally .t-bar.f { background: var(--p5); }
+  .tally .n { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--ink2); }
+  .tally .name { font-size: 14px; }
+  .kind { font-size: 11px; color: var(--ink3); }
+
+  /* 4. repetition */
+  .reps { display: grid; gap: 10px; }
+  .rep { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+  .rep .phrase { font-family: var(--serif); font-size: 18px; }
+  .rep .count { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rep .ticks { grid-column: 1 / -1; position: relative; height: 12px; background: linear-gradient(var(--rule), var(--rule)) center/100% 1px no-repeat; }
+  .rep .ticks b { position: absolute; top: 0; width: 3px; height: 12px; border-radius: 2px; background: var(--ink); }
+
+  /* 5. radar */
+  .radar-wrap { display: grid; grid-template-columns: minmax(260px, 360px) 1fr; gap: 18px; align-items: center; }
+  .radar-wrap table { border-collapse: collapse; font-size: 14px; width: 100%; }
+  .radar-wrap td { padding: 5px 0; border-top: 1px solid var(--rule); }
+  .radar-wrap td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--surface); font-size: 13px; padding: 6px 8px; border-radius: 6px; max-width: 320px; opacity: 0; transition: opacity 120ms; z-index: 5; }
+  @media (max-width: 640px) { .radar-wrap { grid-template-columns: 1fr; } .tally { grid-template-columns: 120px 1fr 30px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>LITMUS Live: five ways to show the shape of a speech</h1>
+  <p class="lede">Mockups only, for choosing. Nothing here is wired to the meter yet.</p>
+  <p class="note">Lines come from Max's rally test on 2026-10-07 and the scores shown for them are what the meter gave. The device tags, highlights and repetition counts are illustrative: the meter does not produce them yet, and building any of them means the scorer must quote the words that show each one, the same evidence rule the LITMUS site uses for its highlights.</p>
+
+  <section>
+    <span class="tag">Option 1 · live and after</span>
+    <h2>Heat ribbon</h2>
+    <p class="what">One bar per line as he speaks, colored by band and taller when hotter; dashed outlines are lines with no claim. The shape shows builds, spikes and cool-downs at a glance. Afterwards the peaks carry their quote; hover or tap any bar for its line.</p>
+    <button class="play" id="play">Play it as if live</button>
+    <div class="ribbon" id="ribbon"><div class="bandlines" id="bandlines"></div></div>
+    <div class="ribbon-read" id="ribbon-read"><span class="label">Tap a bar</span><p class="sentence" style="margin:4px 0 0">&nbsp;</p></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section>
+    <span class="tag">Option 2 · live</span>
+    <h2>Loaded words lit up</h2>
+    <p class="what">The speaker's own loaded words get the site's warm highlight; checkable facts get the cool underline; words he attributes to someone else stay grey and unmarked (the quote rule). Hover a highlight for why it was marked.</p>
+    <p class="live-text" id="live-text"></p>
+    <p class="why-pop" id="why-pop">&nbsp;</p>
+  </section>
+
+  <section>
+    <span class="tag">Option 3 · live chips, tally after</span>
+    <h2>Rhetorical devices and fallacies</h2>
+    <p class="what">Each line can carry up to two tags, shown only when the scorer quotes the words that show it. Afterwards, a tally; red bars are logical fallacies, grey bars are devices (devices are not wrong in themselves).</p>
+    <div id="dev-rows"></div>
+    <div class="tally" id="tally"></div>
+  </section>
+
+  <section>
+    <span class="tag">Option 4 · after</span>
+    <h2>What he kept coming back to</h2>
+    <p class="what">Phrases repeated across the speech, with a tick at each moment it was said, so you see whether it is a refrain or a burst.</p>
+    <div class="reps" id="reps"></div>
+  </section>
+
+  <section>
+    <span class="tag">Option 5 · after</span>
+    <h2>Speech fingerprint</h2>
+    <p class="what">The five measures the whole-speech verdict is built from, the same ones the LITMUS site uses for an article. Strongest later, laid over a second speaker for comparison.</p>
+    <div class="radar-wrap">
+      <svg id="radar" viewBox="0 0 320 300" role="img" aria-label="Five-measure fingerprint of the speech"></svg>
+      <table id="radar-table" aria-label="The five measures as numbers"></table>
+    </div>
+  </section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+const BANDS = [
+  { below: 1.5, name: "Proportionate", c: "var(--p1)" },
+  { below: 2.5, name: "Grounded", c: "var(--p2)" },
+  { below: 3.5, name: "Mixed Signals", c: "var(--p3)" },
+  { below: 4.5, name: "Running Hot", c: "var(--p4)" },
+  { below: 99, name: "Hyperbolic", c: "var(--p5)" },
+];
+const band = (s) => BANDS.find((b) => s < b.below);
+
+// Lines from the 2026-10-07 rally test, in speech order. s = the meter's score; null = no claim.
+const LINES = [
+  ["Thank you very much, everybody.", null],
+  ["This is the most important midterm election.", 4.2],
+  ["We're gonna beat them big.", 4.2],
+  ["Manufacturers. Becton Dickinson, great company.", null],
+  ["Also just announced a $3,000,000,000 investment to bring medical manufacturing back to the United States.", 2.1],
+  ["The biggest part of their investment is in Nebraska.", 1.3],
+  ["My administration has also taken historic action to dramatically lower drug prices.", 3.8],
+  ["How about those B-2 bombers?", null],
+  ["We knock out their navy.", 3.8],
+  ["We knock out their leadership.", 3.8],
+  ["We will take over the Strait of Hormuz.", 4.8],
+  ["I stopped them from ever having a nuclear weapon, and that was the end of that.", 3.4],
+  ["Do you know there's a line that's like three, four miles long of people?", 2.1],
+  ["I love that goat.", null],
+  ["There has been no president that's done more in the first two years.", 4.1],
+  ["They hate America.", 4.4],
+  ["So I'm asking you to do me one favor, pretend I'm on the ballot.", 1.6],
+  ["All of your tax cuts will be gone.", 3.9],
+  ["Early voting or on election day, November 3, you go out and vote.", 1.2],
+  ["They could take out a city. Let them take out Los Angeles.", 4.6],
+  ["We have to stop this threat, the world's worst, this is a group of sick people.", 4.2],
+  ["Sick individuals, drunk, deranged, communist, radicalized lunatics.", 5.0],
+  ["We've been fighting to save America from all of the corrupt and sinister forces.", 4.2],
+  ["Gasoline is way down, it's down to numbers nobody has seen.", 3.6],
+  ["We're going to win so big, bigger than ever before.", 4.3],
+  ["The jumbotron was so big, we actually built the big jumbotron.", 1.9],
+  ["Thank you, God bless you.", null],
+];
+
+const tip = document.getElementById("tip");
+function showTip(e, html) { tip.innerHTML = html; tip.style.opacity = 1; tip.style.left = Math.min(e.clientX + 12, innerWidth - 330) + "px"; tip.style.top = (e.clientY + 14) + "px"; }
+function hideTip() { tip.style.opacity = 0; }
+
+/* 1. ribbon */
+const ribbon = document.getElementById("ribbon");
+const read = document.getElementById("ribbon-read");
+const H = 140;
+const bandlines = document.getElementById("bandlines");
+[[1.5, "1.5"], [2.5, "2.5"], [3.5, "3.5"], [4.5, "4.5"]].forEach(([v, t]) => {
+  const d = document.createElement("div"); d.style.bottom = ((v - 1) / 4) * H + "px"; d.style.top = "auto";
+  d.innerHTML = `<span>${t}</span>`; bandlines.appendChild(d);
+});
+document.getElementById("legend").innerHTML = BANDS.map((b) => `<span><i style="background:${b.c}"></i>${b.name}</span>`).join("") + `<span><i style="border-style:dashed"></i>No claim</span>`;
+function pick(i) {
+  const [t, s] = LINES[i];
+  ribbon.querySelectorAll(".bar").forEach((b, j) => b.classList.toggle("on", j === i));
+  read.innerHTML = `<span class="label">${s == null ? "Not scored, no claim" : s.toFixed(1) + " · " + band(s).name}</span><p class="sentence" style="margin:4px 0 0">${t}</p>`;
+}
+function drawRibbon(n) {
+  ribbon.querySelectorAll(".bar,.peak").forEach((e) => e.remove());
+  LINES.slice(0, n).forEach(([t, s], i) => {
+    const b = document.createElement("div");
+    b.className = "bar" + (s == null ? " nc" : "");
+    b.style.height = (s == null ? 14 : 8 + ((s - 1) / 4) * (H - 8)) + "px";
+    if (s != null) b.style.background = band(s).c;
+    b.addEventListener("mouseenter", (e) => showTip(e, `${s == null ? "no claim" : s.toFixed(1) + " " + band(s).name}<br>${t}`));
+    b.addEventListener("mouseleave", hideTip);
+    b.addEventListener("click", () => pick(i));
+    ribbon.appendChild(b);
+  });
+  if (n === LINES.length) {
+    // Label the two hottest peaks, after the fact only.
+    const top = LINES.map(([t, s], i) => ({ t, s, i })).filter((x) => x.s != null).sort((a, b) => b.s - a.s || a.i - b.i).slice(0, 2);
+    const bars = ribbon.querySelectorAll(".bar");
+    top.forEach((x, k) => {
+      const bar = bars[x.i];
+      const p = document.createElement("div"); p.className = "peak";
+      p.textContent = `“${x.t.split(" ").slice(0, 5).join(" ")}…” ${x.s.toFixed(1)}`;
+      p.style.left = bar.offsetLeft + bar.offsetWidth / 2 + "px";
+      p.style.bottom = (parseFloat(bar.style.height) + 6 + k * 16) + "px";
+      ribbon.appendChild(p);
+    });
+  }
+}
+drawRibbon(LINES.length);
+pick(21);
+let timer = null;
+document.getElementById("play").addEventListener("click", () => {
+  clearInterval(timer); let n = 0; drawRibbon(0);
+  timer = setInterval(() => { n++; drawRibbon(n); pick(n - 1); if (n >= LINES.length) clearInterval(timer); }, 420);
+});
+
+/* 2. highlighted words */
+const TEXT = [
+  ["They ", ""], ["hate America", "hl", "Assigns a motive to opponents with no evidence: contempt in the speaker's own words."],
+  [". We will ", ""], ["take over", "hl", "Conquest framing of a military action."], [" the Strait of Hormuz. ", ""],
+  ["$3,000,000,000 investment", "gr", "A checkable figure stated as fact."], [" in medical manufacturing, ", ""],
+  ["the biggest part of it in Nebraska", "gr", "Checkable."], [". The press said it was ", ""],
+  ["“a disaster”", "quoted", "Someone else's words: not counted against the speaker."],
+  [", but these are ", ""], ["sick individuals", "hl", "Epithet for opponents."], [", ", ""],
+  ["drunk, deranged", "hl", "Epithets stacked in the speaker's own voice."], [", and there has been ", ""],
+  ["no president that's done more", "hl", "Unanchored superlative: nothing checkable makes it a fact."], [" in the first two years.", ""],
+];
+const live = document.getElementById("live-text");
+const pop = document.getElementById("why-pop");
+live.innerHTML = TEXT.map(([t, k, w], i) => k ? `<span class="${k}" data-i="${i}">${t}</span>` : t).join("");
+live.querySelectorAll("[data-i]").forEach((el) => {
+  const w = TEXT[+el.dataset.i][2];
+  el.addEventListener("mouseenter", () => { pop.textContent = w; });
+  el.addEventListener("click", () => { pop.textContent = w; });
+});
+
+/* 3. devices */
+const DEV = [
+  ["They hate America.", [["Ad hominem", true], ["Us vs. them", false]]],
+  ["There has been no president that's done more in the first two years.", [["Unanchored superlative", false]]],
+  ["All of your tax cuts will be gone.", [["Appeal to fear", true]]],
+  ["Let them take out Los Angeles.", [["Appeal to fear", true], ["Us vs. them", false]]],
+  ["Sick individuals, drunk, deranged, communist, radicalized lunatics.", [["Ad hominem", true], ["Epithet stacking", false]]],
+];
+document.getElementById("dev-rows").innerHTML = DEV.map(([t, tags]) => `<div class="dev-row"><p class="sentence" style="margin:0">${t}</p><div class="chips">${tags.map(([n, f]) => `<span class="chip${f ? " f" : ""}">${n}</span>`).join("")}</div></div>`).join("");
+const TALLY = [["Appeal to fear", 7, true], ["Ad hominem", 6, true], ["Us vs. them", 9, false], ["Unanchored superlative", 8, false], ["Epithet stacking", 4, false], ["False dilemma", 2, true]];
+const maxT = Math.max(...TALLY.map((x) => x[1]));
+document.getElementById("tally").innerHTML = TALLY.sort((a, b) => b[1] - a[1]).map(([n, c, f]) =>
+  `<span class="name">${n}<br><span class="kind">${f ? "fallacy" : "device"}</span></span><div class="t-bar${f ? " f" : ""}" style="width:${(c / maxT) * 100}%"></div><span class="n">${c}</span>`).join("");
+
+/* 4. repetition */
+const REPS = [["“win big” / “beat them big”", [0.06, 0.09, 0.31, 0.55, 0.88, 0.9]], ["“the worst”", [0.12, 0.4, 0.62, 0.64, 0.7]], ["“sick”", [0.6, 0.66, 0.67, 0.81]], ["“nobody has ever seen”", [0.22, 0.5, 0.85]]];
+document.getElementById("reps").innerHTML = REPS.map(([p, at]) => `<div class="rep"><span class="phrase">${p}</span><span class="count">×${at.length}</span><div class="ticks">${at.map((x) => `<b style="left:calc(${x * 100}% - 1.5px)"></b>`).join("")}</div></div>`).join("");
+
+/* 5. radar */
+const DIMS = [["Framing", 4.3], ["Language", 4.5], ["Sourcing", 3.5], ["Fallacies", 4.0], ["Structure", 3.8]];
+const svg = document.getElementById("radar");
+const cx = 160, cy = 155, R = 115;
+const pt = (i, v) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5; const r = ((v - 1) / 4) * R; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+let g = "";
+[2, 3, 4, 5].forEach((lvl) => { g += `<polygon points="${DIMS.map((_, i) => pt(i, lvl).join(",")).join(" ")}" fill="none" stroke="var(--rule)" stroke-width="1"/>`; });
+DIMS.forEach(([n], i) => { const [x, y] = pt(i, 5); g += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--rule)"/>`; const [lx, ly] = pt(i, 5.55); g += `<text x="${lx}" y="${ly}" font-size="12" text-anchor="middle" dominant-baseline="middle" fill="var(--ink2)" font-family="Instrument Sans">${n}</text>`; });
+g += `<polygon points="${DIMS.map(([, v], i) => pt(i, v).join(",")).join(" ")}" fill="rgba(192,90,22,.22)" stroke="var(--p4)" stroke-width="2" stroke-linejoin="round"/>`;
+DIMS.forEach(([n, v], i) => { const [x, y] = pt(i, v); g += `<circle cx="${x}" cy="${y}" r="5" fill="var(--p4)" stroke="var(--surface)" stroke-width="2" data-n="${n}" data-v="${v}"/>`; });
+svg.innerHTML = g;
+svg.querySelectorAll("circle").forEach((c) => { c.addEventListener("mouseenter", (e) => showTip(e, `${c.dataset.n}: ${(+c.dataset.v).toFixed(1)}`)); c.addEventListener("mouseleave", hideTip); });
+document.getElementById("radar-table").innerHTML = DIMS.map(([n, v]) => `<tr><td>${n}</td><td>${v.toFixed(1)}</td></tr>`).join("") + `<tr><td>Whole speech (computed)</td><td>4.1 Running Hot</td></tr>`;
+</script>
+</body>
+</html>
