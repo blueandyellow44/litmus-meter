@@ -1,6 +1,7 @@
 // Records real meter scores for a fixed speech, for a static replay page.
 // Usage: node scripts/record-replay.mjs <sentences.json> <out.json> [base-url]
-//   sentences.json: a JSON array of strings, in speech order.
+//   sentences.json: a JSON array of strings in speech order, or a debates file
+//   ({ debates: [{ id, speakers: [{ id, name, sentences }] }] }).
 // Runs against the local meter (default http://127.0.0.1:8796) with real keys,
 // exactly as a live listen would: each line scored in order with the previous
 // two lines as context, then the whole-speech verdict. Real spend: about
@@ -17,13 +18,23 @@ if (!inPath || !outPath) {
   process.exit(2);
 }
 
-const sentences = JSON.parse(readFileSync(inPath, "utf8"));
-if (!Array.isArray(sentences) || !sentences.every((s) => typeof s === "string" && s.trim())) {
-  console.error("sentences.json must be a JSON array of non-empty strings");
-  process.exit(2);
+// Input: a plain array of sentences (one speech), or a debates file
+// { debates: [{ id, speakers: [{ id, name, sentences: [] }] }] }. Each speaker
+// is scored on their own: context never crosses from one speaker to another.
+const input = JSON.parse(readFileSync(inPath, "utf8"));
+const speeches = Array.isArray(input)
+  ? [{ id: "speech", name: null, debate: null, sentences: input }]
+  : (input.debates ?? []).flatMap((d) => (d.speakers ?? []).map((sp) => ({ id: sp.id, name: sp.name ?? null, debate: d.id ?? null, sentences: sp.sentences })));
+const MAX_LINES = 150;
+const total = speeches.reduce((n, sp) => n + (Array.isArray(sp.sentences) ? sp.sentences.length : 0), 0);
+for (const sp of speeches) {
+  if (!sp.id || !Array.isArray(sp.sentences) || !sp.sentences.every((x) => typeof x === "string" && x.trim())) {
+    console.error(`speech ${sp.id ?? "?"}: sentences must be a non-empty array of strings`);
+    process.exit(2);
+  }
 }
-if (sentences.length > 60) {
-  console.error(`refusing ${sentences.length} sentences; this script is for short demo speeches (max 60)`);
+if (total === 0 || total > MAX_LINES) {
+  console.error(`refusing ${total} lines; this script is for demo excerpts (1-${MAX_LINES})`);
   process.exit(2);
 }
 
@@ -50,54 +61,60 @@ if (session.stub && !allowStub) {
   process.exit(1);
 }
 
-const lines = [];
 let cost = 0;
-for (let i = 0; i < sentences.length; i++) {
-  const text = sentences[i].trim();
-  const context = sentences.slice(Math.max(0, i - 2), i);
-  const r = await post("/api/score", { text, context });
-  cost += Number(r.body.cost_usd) || 0;
-  if (r.status !== 200) {
-    console.error(`line ${i + 1}: ${r.status} ${r.body.error ?? ""}`);
-    lines.push({ seq: i, heard: text, status: "dropped" });
-    continue;
+async function scoreSpeech(sentences) {
+  const lines = [];
+  for (let i = 0; i < sentences.length; i++) {
+    const text = sentences[i].trim();
+    const context = sentences.slice(Math.max(0, i - 2), i);
+    const r = await post("/api/score", { text, context });
+    cost += Number(r.body.cost_usd) || 0;
+    if (r.status !== 200) {
+      console.error(`  line ${i + 1}: ${r.status} ${r.body.error ?? ""}`);
+      lines.push({ seq: i, heard: text, status: "dropped" });
+      if (r.status === 402) throw new Error("meter budget reached");
+      continue;
+    }
+    const b = r.body;
+    lines.push({ seq: i, heard: text, text: b.text, status: b.claim ? "scored" : "noclaim", score: b.score, reason: b.reason, continues: b.continues, marks: b.marks, devices: b.devices, appeal: b.appeal });
+    console.log(`  ${i + 1}/${sentences.length} ${b.claim ? b.score.toFixed(1) : "no claim"}`);
   }
-  const b = r.body;
-  lines.push({
-    seq: i,
-    heard: text,
-    text: b.text,
-    status: b.claim ? "scored" : "noclaim",
-    score: b.score,
-    reason: b.reason,
-    continues: b.continues,
-    marks: b.marks,
-    devices: b.devices,
-    appeal: b.appeal,
+  const scored = lines.filter((l) => l.status === "scored");
+  const syn = await post("/api/synopsis", {
+    lines: scored.map((l) => ({ seq: l.seq, text: l.text, score: l.score, reason: l.reason })),
+    transcript: lines.filter((l) => l.status !== "dropped").map((l) => l.text),
   });
-  console.log(`${i + 1}/${sentences.length} ${b.claim ? b.score.toFixed(1) : "no claim"}`);
+  cost += Number(syn.body.cost_usd) || 0;
+  return {
+    lines,
+    report: {
+      verdict: syn.body.verdict ?? null,
+      style_name: syn.body.style_name ?? null,
+      summary: syn.body.summary_text ?? null,
+      why: syn.body.why ?? null,
+      line_stats: syn.body.summary ?? null,
+    },
+  };
 }
 
-const scored = lines.filter((l) => l.status === "scored");
-const syn = await post("/api/synopsis", {
-  lines: scored.map((l) => ({ seq: l.seq, text: l.text, score: l.score, reason: l.reason })),
-  transcript: lines.filter((l) => l.status !== "dropped").map((l) => l.text),
-});
-cost += Number(syn.body.cost_usd) || 0;
+const results = {};
+for (const sp of speeches) {
+  console.log(`${sp.id} (${sp.sentences.length} lines)`);
+  results[sp.id] = { name: sp.name, debate: sp.debate, ...(await scoreSpeech(sp.sentences)) };
+  const v = results[sp.id].report.verdict;
+  console.log(`  verdict ${v ? `${v.band} ${v.score}` : "none"}`);
+}
 
+const git = (args) => execSync(`git ${args}`, { cwd: new URL("..", import.meta.url) }).toString().trim();
 const out = {
   recorded_at: new Date().toISOString(),
-  meter_commit: execSync("git rev-parse --short HEAD", { cwd: new URL("..", import.meta.url) }).toString().trim(),
-  note: "Real scores from the LITMUS Live meter (claude-haiku-4-5, rubric in server/rubric.ts). The speech is invented.",
-  lines,
-  report: {
-    verdict: syn.body.verdict ?? null,
-    style_name: syn.body.style_name ?? null,
-    summary: syn.body.summary_text ?? null,
-    why: syn.body.why ?? null,
-    line_stats: syn.body.summary ?? null,
-  },
-  cost_usd: Math.round(cost * 10000) / 10000,
+  meter_commit: git("rev-parse --short HEAD"),
+  rubric_version: git("log -1 --format=%h -- server/rubric.ts server/labels.ts server/verdict.ts"),
+  model: "claude-haiku-4-5",
+  note: "Automated readings by the LITMUS Live meter: each line scored on its own with up to two earlier lines from the same speaker as context; the verdict is the whole excerpt scored with the LITMUS site's composite. Not a verdict on any person.",
+  speeches: results,
+  cost_usd: 0,
 };
+out.cost_usd = Math.round(cost * 10000) / 10000;
 writeFileSync(outPath, JSON.stringify(out, null, 2));
-console.log(`wrote ${outPath}; verdict ${out.report.verdict ? `${out.report.verdict.band} ${out.report.verdict.score}` : "none"}; cost $${out.cost_usd}`);
+console.log(`wrote ${outPath}; ${Object.keys(results).length} speeches; cost $${out.cost_usd}`);
