@@ -20,10 +20,11 @@ The rubric is in `server/rubric.ts`; its header names the LITMUS source file and
 
 The spend cap charges Deepgram at the regular $0.0077/min, so it over-counts while the promotion lasts rather than under-counting when it ends. Rates live in `server/prices.ts`.
 
-Estimated cost per hour of listening: about **$1.50** (range $1.30 to $2.00).
+Estimated cost per hour of listening: about **$2.50** (range $2 to $3.50), re-measured 2026-10-07 on the deployed meter.
 - Deepgram: 60 min x $0.0077 = $0.46.
-- Scoring: about 1,300 input tokens per sentence (system prompt and tool schema about 700, Anthropic's forced-tool overhead 588, the sentence about 30) and about 80 output tokens, so about $0.0017 per sentence. Broadcast speech runs about 10 sentences a minute, so 600 an hour, about $1.03. Fast talk-show speech with short sentences can reach 15 a minute, about $1.55.
-- At that rate the $50 cap is roughly 25 to 35 hours of listening.
+- Scoring: about $0.0035 per line, measured on a live call. The prompt grew tonight (context lines, underlines, move and fallacy labels, appeal), roughly doubling the first estimate. Broadcast speech runs about 10 lines a minute, so about $2.10 an hour; fast speech more.
+- The end report: about a cent per listen.
+- At that rate the $50 cap is roughly 15 to 25 hours of listening.
 
 ## Spend cap
 
@@ -46,7 +47,11 @@ npm run dev                      # http://127.0.0.1:8788
 
 With `STUB_MODE=1` the server fakes Deepgram and Anthropic (realistic delays and usage numbers, and about one malformed answer in eleven), and the page plays a scripted broadcast through the real pipeline. Stub mode is refused on any host other than localhost. The stub's scores come from a keyword list and say nothing about the real rubric. Tick "Show lag" to see final-transcript-to-display time per sentence.
 
-## Deploy (Max runs these; nothing here has been run)
+## Deploy
+
+Deployed 2026-10-07 on Max's word ("deploy it") to https://litmus-meter.pages.dev (Pages project `litmus-meter`, KV `METER_KV`). The production passcode is in `.meter-passcode` (git-ignored), never in chat or git. To redeploy: `npm run deploy`.
+
+First-time setup, for reference:
 
 ```sh
 # 1. Create the Pages project and the KV namespace (writes the id into wrangler.toml)

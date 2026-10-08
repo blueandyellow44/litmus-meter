@@ -6,4 +6,4 @@ compatibility_date = "2026-09-01"
 # scripts/create-project.sh replaces it with the real namespace id.
 [[kv_namespaces]]
 binding = "METER_KV"
-id = "00000000000000000000000000000000"
+id = "cd9016003c984530b0f4b6a90402454b"
