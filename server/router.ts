@@ -196,7 +196,7 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         const parsed = parseVerdict(verdictInput(response));
         if (!parsed.ok) {
           problem = parsed.problem;
-          deps.log({ event: "verdict_refused", attempt, problem });
+          deps.log({ event: "verdict_refused", attempt, problem, stop_reason: response.stop_reason ?? null, output_tokens: response.usage?.output_tokens ?? null });
           continue;
         }
         // A good verdict from an earlier try is kept; a retry only improves the Why.

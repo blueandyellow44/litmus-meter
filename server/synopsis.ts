@@ -93,7 +93,9 @@ export function buildVerdictRequest(transcript: string[], retryProblem: string |
     : "";
   return {
     model: SCORER_MODEL,
-    max_tokens: 400,
+    // Dimensions, flags, a style name, a 3-5 sentence summary and the Why.
+    // 400 cut the reply off before "why" on full debate answers (2026-10-07).
+    max_tokens: 1200,
     temperature: 0,
     system: VERDICT_PROMPT,
     tools: [VERDICT_TOOL],

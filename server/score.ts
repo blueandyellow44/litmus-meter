@@ -10,6 +10,7 @@ export const MAX_SENTENCE_CHARS = 1000;
 const MAX_REASON_CHARS = 240;
 
 export interface AnthropicResponse {
+  stop_reason?: string;
   content?: Array<{ type: string; name?: string; input?: unknown }>;
   usage?: AnthropicUsage;
 }

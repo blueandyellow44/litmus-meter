@@ -12,6 +12,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
 const allowStub = args.includes("--allow-stub"); // for testing this script only
+// --verdicts-from <scores.json>: keep the recorded lines, redo only the
+// whole-speech verdicts (one call per speaker instead of one per line).
+const vfIndex = args.indexOf("--verdicts-from");
+const verdictsFrom = vfIndex >= 0 ? args[vfIndex + 1] : null;
+if (vfIndex >= 0) args.splice(vfIndex, 2);
 const [inPath, outPath, base = "http://127.0.0.1:8796"] = args.filter((a) => a !== "--allow-stub");
 if (!inPath || !outPath) {
   console.error("usage: node scripts/record-replay.mjs <sentences.json> <out.json> [base-url]");
@@ -62,9 +67,9 @@ if (session.stub && !allowStub) {
 }
 
 let cost = 0;
-async function scoreSpeech(sentences) {
-  const lines = [];
-  for (let i = 0; i < sentences.length; i++) {
+async function scoreSpeech(sentences, recorded = null) {
+  const lines = recorded ? recorded.lines : [];
+  for (let i = 0; !recorded && i < sentences.length; i++) {
     const text = sentences[i].trim();
     const context = sentences.slice(Math.max(0, i - 2), i);
     const r = await post("/api/score", { text, context });
@@ -97,10 +102,13 @@ async function scoreSpeech(sentences) {
   };
 }
 
+const previous = verdictsFrom ? JSON.parse(readFileSync(verdictsFrom, "utf8")) : null;
 const results = {};
 for (const sp of speeches) {
-  console.log(`${sp.id} (${sp.sentences.length} lines)`);
-  results[sp.id] = { name: sp.name, debate: sp.debate, ...(await scoreSpeech(sp.sentences)) };
+  console.log(`${sp.id} (${sp.sentences.length} lines${previous ? ", verdict only" : ""})`);
+  const recorded = previous?.speeches?.[sp.id] ?? null;
+  if (previous && !recorded) throw new Error(`${sp.id} is missing from ${verdictsFrom}`);
+  results[sp.id] = { name: sp.name, debate: sp.debate, ...(await scoreSpeech(sp.sentences, recorded)) };
   const v = results[sp.id].report.verdict;
   console.log(`  verdict ${v ? `${v.band} ${v.score}` : "none"}`);
 }
@@ -115,6 +123,7 @@ const out = {
   speeches: results,
   cost_usd: 0,
 };
-out.cost_usd = Math.round(cost * 10000) / 10000;
+out.cost_usd = Math.round((cost + (previous?.cost_usd ?? 0)) * 10000) / 10000;
+if (previous) out.lines_recorded_at = previous.recorded_at;
 writeFileSync(outPath, JSON.stringify(out, null, 2));
 console.log(`wrote ${outPath}; ${Object.keys(results).length} speeches; cost $${out.cost_usd}`);
