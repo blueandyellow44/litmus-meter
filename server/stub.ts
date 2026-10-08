@@ -55,6 +55,7 @@ export function stubAnthropic(sleep: (ms: number) => Promise<void> = (ms) => new
             loaded_framing: hot.length > 2, emotional_open: false, fallacy_count: hot.length ? 1 : 0,
             one_sided_sourcing: false, advocacy_speech: false,
             why: `The heat came from lines like "${quote}".`,
+            summary: `The speaker covered ${lines.length} lines of remarks. The speaker said a spending bill passed and described its funding. The speaker attacked critics and opponents. The speaker closed by handing back to the studio.`,
           },
         }],
         usage: { input_tokens: 2500, output_tokens: 150 },
@@ -70,6 +71,7 @@ export function stubAnthropic(sleep: (ms: number) => Promise<void> = (ms) => new
     const text = sentence.replace(/Strait of Hormones/i, "Strait of Hormuz");
     // A line that starts lowercase picks up where the last one broke off.
     const continues = /^[a-z]/.test(sentence) && content.includes("Score this line:");
-    return { content: [{ type: "tool_use", name: SCORE_TOOL.name, input: { text, claim, score, reason, continues } }], usage };
+    const marks = sentence.match(new RegExp(HOT.source, "gi")) ?? [];
+    return { content: [{ type: "tool_use", name: SCORE_TOOL.name, input: { text, claim, score, reason, continues, marks } }], usage };
   };
 }

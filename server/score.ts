@@ -2,6 +2,7 @@
 
 import { SCORE_TOOL, SYSTEM_PROMPT } from "./rubric.ts";
 import type { AnthropicUsage } from "./prices.ts";
+export { validateMarks } from "./marks.ts";
 
 export const SCORER_MODEL = "claude-haiku-4-5";
 const MAX_OUTPUT_TOKENS = 200;
@@ -19,6 +20,7 @@ export interface ValidScore {
   text: string;
   claim: boolean;
   continues: boolean;
+  marks: unknown;
   score: number;
   reason: string;
 }
@@ -123,7 +125,7 @@ export function validateToolOutput(response: AnthropicResponse): ValidScore | nu
   const block = response.content?.find((c) => c.type === "tool_use" && c.name === SCORE_TOOL.name);
   const input = block?.input;
   if (!input || typeof input !== "object") return null;
-  const { text, claim, score, reason, continues } = input as Record<string, unknown>;
+  const { text, claim, score, reason, continues, marks } = input as Record<string, unknown>;
   if (typeof text !== "string" || text.trim() === "") return null;
   if (typeof claim !== "boolean") return null;
   if (typeof reason !== "string" || reason.trim() === "") return null;
@@ -134,6 +136,8 @@ export function validateToolOutput(response: AnthropicResponse): ValidScore | nu
     claim: claim || score > NOCLAIM_MAX_SCORE,
     // Optional so an answer without it is still usable: it just does not merge.
     continues: continues === true,
+    // Validated against the shown line by the caller (validateMarks).
+    marks,
     score: Math.round(score * 10) / 10,
     reason: reason.trim().slice(0, MAX_REASON_CHARS),
   };

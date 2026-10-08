@@ -31,7 +31,7 @@ function harness() {
   return { p, calls, interims, changed };
 }
 
-const scored = (score: number, reason = "r", claim = true, text = "", continues = false): ScoreResult => ({ kind: "scored", score, reason, claim, text, continues, costUsd: 0.002, warn: false });
+const scored = (score: number, reason = "r", claim = true, text = "", continues = false, marks: string[] = []): ScoreResult => ({ kind: "scored", score, reason, claim, text, continues, marks, marksRaw: marks, costUsd: 0.002, warn: false });
 
 describe("one scoring call per final sentence, none for interims", () => {
   it("interims update the live line and never score", () => {
@@ -335,5 +335,26 @@ describe("context and self-correcting lines (Max, 2026-10-07)", () => {
     await tick();
     expect(h.p.store.hottest()?.seq).toBe(1);
     expect(h.p.store.transcript()).toEqual(["This is a total disaster for us. but we fixed it completely."]);
+  });
+});
+
+describe("hyperbolic words underlined (Max, 2026-10-07)", () => {
+  it("a scored line keeps its marks; a no-claim line keeps none", async () => {
+    const h = harness();
+    h.p.handleMessage(final("They are sick people, the worst ever. Thank you all so much."));
+    h.calls[0]!.d.resolve(scored(4.4, "r", true, "They are sick people, the worst ever.", false, ["sick people", "the worst ever"]));
+    h.calls[1]!.d.resolve(scored(1.0, "r", false, "Thank you all so much.", false, ["much"]));
+    await tick();
+    expect(h.p.store.get(0)!.marks).toEqual(["sick people", "the worst ever"]);
+    expect(h.p.store.get(1)!.marks).toEqual([]);
+  });
+
+  it("on a merge, marks from either half are re-checked against the whole thought", async () => {
+    const h = harness();
+    h.p.handleMessage(final("They hate this country."));
+    h.p.handleMessage(final("and they always have, total disaster."));
+    h.calls[1]!.d.resolve(scored(4.2, "r", true, "and they always have, total disaster.", true, ["hate this country", "total disaster", "invented words"]));
+    await tick();
+    expect(h.p.store.scored()[0]!.marks).toEqual(["hate this country", "total disaster"]);
   });
 });

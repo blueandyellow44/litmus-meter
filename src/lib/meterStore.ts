@@ -14,6 +14,7 @@ export interface Entry {
   status: "pending" | "scored" | "noclaim" | "dropped" | "merged";
   score?: number;
   reason?: string;
+  marks?: string[]; // the speaker's own hyperbolic words in `text`, verbatim
   lagMs?: number;
 }
 
@@ -27,11 +28,12 @@ export class MeterStore {
     return e;
   }
 
-  resolve(seq: number, score: number, reason: string, claim = true, shownText?: string): Entry | null {
+  resolve(seq: number, score: number, reason: string, claim = true, shownText?: string, marks: string[] = []): Entry | null {
     const e = this.entries.get(seq);
     if (!e || e.status !== "pending") return null;
     if (shownText) e.text = shownText;
     e.reason = reason;
+    e.marks = claim ? marks : [];
     if (!claim) {
       e.status = "noclaim";
       return e;
@@ -109,10 +111,15 @@ export class MeterStore {
   // A merged line is skipped because its words live on in the line that
   // absorbed it.
   transcript(): string[] {
+    return this.spoken().map((e) => e.text);
+  }
+
+  // The resolved lines in speech order, merged lines excluded: the recap's
+  // "whole speech" and the verdict's transcript come from the same list.
+  spoken(): Entry[] {
     return [...this.entries.values()]
       .filter((e) => e.status !== "merged" && e.status !== "pending")
-      .sort((a, b) => a.seq - b.seq)
-      .map((e) => e.text);
+      .sort((a, b) => a.seq - b.seq);
   }
 
   pendingCount(): number {

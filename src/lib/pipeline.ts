@@ -6,9 +6,10 @@
 
 import { MeterStore } from "./meterStore.ts";
 import { SentenceAssembler } from "./sentences.ts";
+import { validateMarks } from "../../server/marks.ts";
 
 export type ScoreResult =
-  | { kind: "scored"; score: number; reason: string; claim: boolean; text: string; continues: boolean; costUsd: number; warn: boolean }
+  | { kind: "scored"; score: number; reason: string; claim: boolean; text: string; continues: boolean; marks: string[]; marksRaw: string[]; costUsd: number; warn: boolean }
   | { kind: "dropped"; costUsd: number; warn: boolean }
   | { kind: "budget" };
 
@@ -119,7 +120,10 @@ export class Pipeline {
       }
     }
     const shown = mergedSeq === undefined ? result.text : `${this.store.get(seq)!.text.slice(0, -text.length)}${result.text}`.trim();
-    this.store.resolve(seq, result.score, result.reason, result.claim, shown);
+    // On a merge the marks may sit in either half, so they are re-checked
+    // against the whole thought; otherwise the server already checked them.
+    const marks = mergedSeq === undefined ? result.marks : validateMarks(shown, result.marksRaw);
+    this.store.resolve(seq, result.score, result.reason, result.claim, shown, marks);
     this.hooks.changed(seq, mergedSeq);
   }
 }

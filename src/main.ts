@@ -34,6 +34,10 @@ const el = {
   synCounts: $("syn-counts"),
   synHot: $<HTMLOListElement>("syn-hot"),
   synCalm: $<HTMLOListElement>("syn-calm"),
+  synSummary: $("syn-summary"),
+  synAll: $<HTMLOListElement>("syn-all"),
+  synAllCount: $("syn-all-count"),
+  synAllWrap: $("syn-all-wrap"),
   list: $<HTMLOListElement>("list"),
   minutes: $("minutes"),
   cost: $("cost"),
@@ -61,7 +65,30 @@ function setText(node: HTMLElement, text: string): void {
   node.textContent = text || " ";
 }
 
-function rowHtml(e: { seq: number; text: string; heard?: string; score?: number; reason?: string; lagMs?: number; status?: string }): HTMLElement {
+// Writes `text` into `node` with each mark in the site's loaded highlight.
+// Built from text nodes, never innerHTML, so a transcript cannot inject markup.
+function writeMarked(node: HTMLElement, text: string, marks: string[] = []): void {
+  node.replaceChildren();
+  const lower = text.toLowerCase();
+  const spans = marks
+    .map((m) => [lower.indexOf(m.toLowerCase()), m.length] as const)
+    .filter(([at]) => at >= 0)
+    .sort((a, b) => a[0] - b[0]);
+  let i = 0;
+  for (const [at, len] of spans) {
+    if (at < i) continue; // overlapping marks were refused upstream; skip defensively
+    if (at > i) node.append(text.slice(i, at));
+    const mark = document.createElement("mark");
+    mark.className = "hl-loaded";
+    mark.textContent = text.slice(at, at + len);
+    node.append(mark);
+    i = at + len;
+  }
+  if (i < text.length) node.append(text.slice(i));
+  if (!text) node.textContent = "\u00a0";
+}
+
+function rowHtml(e: { seq: number; text: string; heard?: string; score?: number; reason?: string; marks?: string[]; lagMs?: number; status?: string }): HTMLElement {
   const scored = e.status !== "noclaim" && e.score !== undefined;
   const frag = document.createElement("div");
   frag.className = scored ? "row" : "row noclaim";
@@ -76,7 +103,7 @@ function rowHtml(e: { seq: number; text: string; heard?: string; score?: number;
   score.textContent = scored ? e.score!.toFixed(1) : "\u2013";
   const sentence = document.createElement("p");
   sentence.className = "sentence";
-  sentence.textContent = e.text;
+  writeMarked(sentence, e.text, scored ? e.marks : []);
   // A corrected proper noun is shown; what was actually heard stays one hover away.
   if (e.heard && e.heard !== e.text) sentence.title = `Heard as: ${e.heard}`;
   const reason = document.createElement("p");
@@ -117,7 +144,8 @@ function renderAfterScore(pipeline: Pipeline, seq: number | null): void {
     el.needle.style.transform = `rotate(${needleDegrees(value).toFixed(2)}deg)`;
     el.gaugeValue.textContent = `${value.toFixed(1)} ${bandLabel(value)}`;
   }
-  setText(el.showing, store.needleSentence()?.text ?? "");
+  const showing = store.needleSentence();
+  writeMarked(el.showing, showing?.text ?? "", showing?.marks);
 
   const hot = store.hottest();
   if (hot) {
@@ -167,15 +195,19 @@ function resetDisplay(): void {
 }
 
 // ── end-of-listen synopsis ───────────────────────────────────────────────────
-function proofItem(l: api.SynopsisLine): HTMLLIElement {
+// Recap lines carry the marks the page already holds for that line.
+function proofItem(pipeline: Pipeline, l: api.SynopsisLine): HTMLLIElement {
   const li = document.createElement("li");
-  li.append(rowHtml({ ...l, status: "scored" }));
+  li.append(rowHtml({ ...l, marks: pipeline.store.get(l.seq)?.marks ?? [], status: "scored" }));
   return li;
 }
 
 async function showSynopsis(pipeline: Pipeline): Promise<void> {
   el.synopsis.hidden = false;
   el.synVerdict.textContent = "Adding it up\u2026";
+  el.synSummary.textContent = "";
+  el.synSummary.hidden = true;
+  el.synAllWrap.hidden = true;
   el.synWhy.textContent = "";
   el.synCounts.textContent = "";
   el.synHot.replaceChildren();
@@ -206,6 +238,9 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
     el.synWhy.textContent = `Fewer than three lines made a claim.`;
     return;
   }
+  // What was said, before any verdict, as the site's facts panel comes first.
+  el.synSummary.textContent = result.summary_text ?? "";
+  el.synSummary.hidden = !result.summary_text;
   const v = result.verdict;
   // Two numbers, roles named: the whole speech scored the site's way leads;
   // the plain line average follows so the listener can weigh both.
@@ -221,8 +256,19 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
   el.synCounts.textContent = v
     ? `Whole speech scored the LITMUS way.${raised} Line by line it averaged ${s.score.toFixed(1)} over ${s.lines} scored lines: ${counts}.`
     : `The whole-speech score could not be made, so this is the average of ${s.lines} scored lines: ${counts}.`;
-  el.synHot.replaceChildren(...s.hottest.map(proofItem));
-  el.synCalm.replaceChildren(...s.calmest.map(proofItem));
+  el.synHot.replaceChildren(...s.hottest.map((l) => proofItem(pipeline, l)));
+  el.synCalm.replaceChildren(...s.calmest.map((l) => proofItem(pipeline, l)));
+  // The whole speech, hyperbolic words underlined, one line per row.
+  const spoken = pipeline.store.spoken().filter((e) => e.status === "scored" || e.status === "noclaim");
+  el.synAllCount.textContent = `Read the whole speech, ${spoken.length} lines, hyperbolic words underlined`;
+  el.synAll.replaceChildren(
+    ...spoken.map((e) => {
+      const li = document.createElement("li");
+      li.append(rowHtml(e));
+      return li;
+    }),
+  );
+  el.synAllWrap.hidden = spoken.length === 0;
   el.synopsis.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 

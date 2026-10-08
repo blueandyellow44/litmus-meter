@@ -97,6 +97,16 @@ export interface ParsedVerdict {
   dims: VerdictDimensions;
   flags: VerdictFlags;
   why: string;
+  summary: string | null;
+}
+
+const MAX_SUMMARY_CHARS = 1200;
+
+// The paragraph summary is optional: a missing one leaves the recap without
+// it rather than refusing a sound verdict.
+function cleanSummary(v: unknown): string | null {
+  if (typeof v !== "string" || v.trim() === "") return null;
+  return v.trim().replace(/\s*\u2014\s*/g, ", ").slice(0, MAX_SUMMARY_CHARS);
 }
 
 // The site's binding rules: "no side suppressed" with sourcing above 2.0, or
@@ -133,6 +143,7 @@ export function parseVerdict(input: unknown): { ok: true; value: ParsedVerdict }
         advocacySpeech: i.advocacy_speech as boolean,
       },
       why: i.why.trim().replace(/—/g, ", ").slice(0, 400),
+      summary: cleanSummary(i.summary),
     },
   };
 }

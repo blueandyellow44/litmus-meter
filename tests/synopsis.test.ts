@@ -3,6 +3,7 @@ import { handle } from "../server/router.ts";
 import { acceptCorrection, validateToolOutput } from "../server/score.ts";
 import { summarize, whyQuotesALine, type ScoredLine } from "../server/synopsis.ts";
 import { computeVerdict, parseVerdict } from "../server/verdict.ts";
+import { validateMarks } from "../server/marks.ts";
 import { env, makeDeps, MemoryStore, PASSCODE, req } from "./helpers.ts";
 import { SPEND_KEY } from "../server/spend.ts";
 import type { AnthropicResponse } from "../server/score.ts";
@@ -89,7 +90,7 @@ describe("synopsis route", () => {
   const transcript = ["Line number 0 says a thing.", "They are destroying this great country of ours.", "Line number 2 says a thing."];
   const body = JSON.stringify({ lines, transcript });
   const verdict = (over: Record<string, unknown> = {}): AnthropicResponse => ({
-    content: [{ type: "tool_use", name: "report_verdict", input: { framing: 4, language: 4, sourcing: 2, fallacies: 2.5, structure: 3, loaded_framing: true, emotional_open: false, fallacy_count: 1, one_sided_sourcing: false, advocacy_speech: true, why: 'Words like "destroying this great country" set it.', ...over } }],
+    content: [{ type: "tool_use", name: "report_verdict", input: { framing: 4, language: 4, sourcing: 2, fallacies: 2.5, structure: 3, loaded_framing: true, emotional_open: false, fallacy_count: 1, one_sided_sourcing: false, advocacy_speech: true, why: 'Words like "destroying this great country" set it.', summary: "The speaker said the country is being destroyed.", ...over } }],
     usage: { input_tokens: 2000, output_tokens: 120 },
   });
   type R = { summary: { score: number } | null; verdict: { score: number; band: string } | null; why: string | null };
@@ -109,6 +110,7 @@ describe("synopsis route", () => {
     expect(r.verdict).toMatchObject({ score: 3.4, band: "Mixed Signals" });
     expect(r.summary!.score).toBe(2.2);
     expect(r.why).toContain("destroying this great country");
+    expect((r as unknown as { summary_text: string }).summary_text).toBe("The speaker said the country is being destroyed.");
   });
 
   it("a refused verdict is retried once with the problem named", async () => {
@@ -180,5 +182,36 @@ describe("no-claim gate (live tests 2026-10-07)", () => {
   it("the boundary: 1.4 may be no-claim, 1.5 is counted", () => {
     expect(validateToolOutput(reply("x y", false, 1.4))!.claim).toBe(false);
     expect(validateToolOutput(reply("x y", false, 1.5))!.claim).toBe(true);
+  });
+});
+
+describe("mark validation", () => {
+  it("never marks words after a spoken quote, until unquote or the end of the line", () => {
+    expect(validateMarks("Senator Hale said, quote, this is a catastrophe for families.", ["catastrophe"])).toEqual([]);
+    expect(validateMarks("He said, quote, a disaster, unquote, and that is a radical lie.", ["disaster", "radical lie"])).toEqual(["radical lie"]);
+  });
+  const line = 'They are sick people, and the press called it "a total disaster" today.';
+  it("keeps verbatim marks in the line's own spelling, any case", () => {
+    expect(validateMarks(line, ["Sick People"])).toEqual(["sick people"]);
+  });
+  it("refuses invented words, quoted words, overlaps, long spans, and more than three", () => {
+    expect(validateMarks(line, ["evil"])).toEqual([]);
+    expect(validateMarks(line, ["total disaster"])).toEqual([]); // inside quotation marks
+    expect(validateMarks(line, ["sick people", "sick"])).toEqual(["sick people"]);
+    expect(validateMarks(line, ["They are sick people, and the press called it"])).toEqual([]); // nine words
+    expect(validateMarks("a b c d e f", ["a", "b", "c", "d"])).toHaveLength(3);
+    expect(validateMarks(line, "sick")).toEqual([]);
+  });
+});
+
+describe("paragraph summary", () => {
+  const base = { framing: 3, language: 3, sourcing: 2, fallacies: 2, structure: 2, loaded_framing: false, emotional_open: false, fallacy_count: 0, one_sided_sourcing: false, advocacy_speech: true, why: "x" };
+  it("is returned, with em dashes removed", () => {
+    const r = parseVerdict({ ...base, summary: "The speaker said a bill passed \u2014 then praised it." });
+    expect(r.ok && r.value.summary).toBe("The speaker said a bill passed, then praised it.");
+  });
+  it("is optional: a missing summary does not refuse a sound verdict", () => {
+    const r = parseVerdict(base);
+    expect(r.ok && r.value.summary).toBeNull();
   });
 });

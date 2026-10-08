@@ -244,7 +244,7 @@ describe("scoring route", () => {
   });
 
   it("validates and rounds a good tool call to one decimal", () => {
-    expect(validateToolOutput(goodResponse(3.46, "loaded verb"))).toEqual({ text: "x", claim: true, continues: false, score: 3.5, reason: "loaded verb" });
+    expect(validateToolOutput(goodResponse(3.46, "loaded verb"))).toEqual({ text: "x", claim: true, continues: false, marks: undefined, score: 3.5, reason: "loaded verb" });
     expect(validateToolOutput(goodResponse(1.0))).not.toBeNull();
     expect(validateToolOutput(goodResponse(5.0))).not.toBeNull();
     expect(validateToolOutput(goodResponse(0.9))).toBeNull();

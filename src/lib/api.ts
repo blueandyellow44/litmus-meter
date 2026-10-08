@@ -61,6 +61,8 @@ export async function scoreSentence(text: string, context: string[] = []): Promi
       claim: body.claim !== false,
       text: typeof body.text === "string" && body.text ? body.text : text,
       continues: body.continues === true,
+      marks: Array.isArray(body.marks) ? (body.marks as unknown[]).filter((m): m is string => typeof m === "string") : [],
+      marksRaw: Array.isArray(body.marks_raw) ? (body.marks_raw as unknown[]).filter((m): m is string => typeof m === "string") : [],
       costUsd: Number(body.cost_usd) || 0,
       warn: body.warn === true,
     };
@@ -87,6 +89,7 @@ export interface Synopsis {
   } | null;
   verdict: { score: number; band: string; raised: string[] } | null;
   why: string | null;
+  summary_text: string | null;
 }
 
 export async function synopsis(lines: SynopsisLine[], transcript: string[]): Promise<Synopsis> {

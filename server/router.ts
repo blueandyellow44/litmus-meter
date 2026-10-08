@@ -8,6 +8,7 @@ import { anthropicCostUsd, deepgramCostUsd, DEEPGRAM_USD_PER_MIN, SPEND_CAP_USD,
 import { acceptCorrection, buildRequest, parseContext, MAX_SENTENCE_CHARS, realAnthropic, validateToolOutput, type CallAnthropic } from "./score.ts";
 import { ledgerFor, spendState, type SpendLedger, type SpendStore } from "./spend.ts";
 import { isLocalHost, stubAnthropic } from "./stub.ts";
+import { validateMarks } from "./marks.ts";
 import { buildVerdictRequest, parseLines, parseTranscript, summarize, verdictInput, whyQuotesALine } from "./synopsis.ts";
 import { computeVerdict, parseVerdict, type Verdict } from "./verdict.ts";
 
@@ -150,6 +151,10 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         claim: valid.claim,
         // Only meaningful when there was a previous line to continue.
         continues: valid.continues && parseContext(body?.context).length > 0,
+        // Marks are checked against this line only; on a merge the client
+        // re-checks them against the whole merged thought.
+        marks: valid.claim ? validateMarks(shown, valid.marks) : [],
+        marks_raw: valid.claim && Array.isArray(valid.marks) ? valid.marks.filter((m) => typeof m === "string").slice(0, 3) : [],
         score: valid.score,
         reason: valid.reason,
         cost_usd: cost,
@@ -160,17 +165,18 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
     if (path === "/api/synopsis" && request.method === "POST") {
       const body = await readJson(request);
       const summary = summarize(parseLines(body?.lines));
-      if (!summary) return json({ summary: null, verdict: null, why: null });
+      if (!summary) return json({ summary: null, verdict: null, why: null, summary_text: null });
       const transcript = parseTranscript(body?.transcript);
 
       const before = await deps.ledger.total();
       // Over budget the line numbers still show; the model-scored verdict is skipped.
       if (before >= SPEND_CAP_USD || transcript.length === 0) {
-        return json({ summary, verdict: null, why: null, budget: before >= SPEND_CAP_USD, ...spendState(before) });
+        return json({ summary, verdict: null, why: null, summary_text: null, budget: before >= SPEND_CAP_USD, ...spendState(before) });
       }
 
       let verdict: (Verdict & { dims: unknown }) | null = null;
       let why: string | null = null;
+      let summaryText: string | null = null;
       let cost = 0;
       let problem: string | null = null;
       for (let attempt = 0; attempt < 2 && !(verdict && why); attempt++) {
@@ -190,6 +196,7 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         }
         // A good verdict from an earlier try is kept; a retry only improves the Why.
         if (!verdict) verdict = { ...computeVerdict(parsed.value.dims, parsed.value.flags), dims: parsed.value.dims };
+        summaryText = summaryText ?? parsed.value.summary;
         if (whyQuotesALine(parsed.value.why, transcript)) why = parsed.value.why;
         else {
           problem = "why did not quote three consecutive words of the transcript";
@@ -197,7 +204,7 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         }
       }
       deps.waitUntil(deps.ledger.charge(cost));
-      return json({ summary, verdict, why, cost_usd: cost, ...spendState(before + cost) });
+      return json({ summary, verdict, why, summary_text: summaryText, cost_usd: cost, ...spendState(before + cost) });
     }
 
     return json({ error: "not found" }, 404);

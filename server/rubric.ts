@@ -70,6 +70,8 @@ RULES:
 - CONTEXT. You may be given the speaker's previous one or two lines, marked as context. Use them only to understand what this line refers to ("that", "them", "it"). Do not score the context lines, and do not let their heat carry into this line: score this line's own words.
 - CONTINUES. Set continues true when this line finishes a thought the previous line began (the previous line broke off, or this line is its payoff: "I stopped them from ever having" then "a nuclear weapon, and that was the end of that"). Then score the whole thought, the previous line and this one together, and write the reason for the whole thought. Otherwise continues is false.
 
+- MARKS. In "marks", copy the speaker's own loaded words exactly as they appear in the line: the words a listener would underline as hyperbolic (adapted from the LITMUS site's highlight rules). A single charged word counts ("disaster", "deranged", "the worst ever"). Never mark words he attributes to someone else. Never mark an accurate, checkable description, or a superlative anchored to a record ("the largest since 2008"). Mark only what, lifted out on its own, would steer a listener; a calm line has no marks, and that is the right answer. At most three, each a few words.
+
 Call report_score once. reason: one short plain-English clause naming the words that set the score. No em dashes.
 `.trim();
 
@@ -84,6 +86,7 @@ export const SCORE_TOOL = {
       score: { type: "number", description: "1.0-5.0, one decimal. 1 = most proportionate, 5 = most hyperbolic." },
       reason: { type: "string", description: "One short plain-English clause." },
       continues: { type: "boolean", description: "True when this line finishes the thought the previous line began; then score the whole thought." },
+      marks: { type: "array", items: { type: "string" }, description: "The speaker's own loaded words, copied exactly from the line. Empty for a calm line. At most three." },
     },
     required: ["text", "claim", "score", "reason", "continues"],
   },
@@ -124,6 +127,8 @@ THE FLAGS:
 
 USE THE WHOLE SCALE. A campaign rally that attacks opponents with epithets is routinely 3.5-4.5. A calm briefing is 1.0-2.0. Do not average toward the middle.
 
+summary: a paragraph of three to five sentences saying, strictly neutrally, what the speaker said: the subjects, the claims made, the promises and the requests, each attributed to the speaker ("The speaker said...", "The speaker claimed..."). This is the facts panel, read before any verdict, as on the LITMUS site. No adjectives doing emotional work, no judgement, no verdict, no mention of the score. Do not repeat the speaker's loaded words as fact. Plain words, short sentences, no em dashes, no contractions.
+
 why: one sentence, under 35 words, saying what set the score, quoting at least one phrase of three or more words exactly as it appears in the transcript. Plain words. No em dashes. No contractions. Never tell the listener what to think of the speaker.
 
 Call report_verdict once.
@@ -145,8 +150,9 @@ export const VERDICT_TOOL = {
       fallacy_count: { type: "integer" },
       one_sided_sourcing: { type: "boolean" },
       advocacy_speech: { type: "boolean" },
+      summary: { type: "string", description: "Three to five neutral sentences on what the speaker said, each claim attributed to the speaker." },
       why: { type: "string", description: "One sentence quoting at least three consecutive words from the transcript." },
     },
-    required: ["framing", "language", "sourcing", "fallacies", "structure", "loaded_framing", "emotional_open", "fallacy_count", "one_sided_sourcing", "advocacy_speech", "why"],
+    required: ["framing", "language", "sourcing", "fallacies", "structure", "loaded_framing", "emotional_open", "fallacy_count", "one_sided_sourcing", "advocacy_speech", "summary", "why"],
   },
 } as const;
