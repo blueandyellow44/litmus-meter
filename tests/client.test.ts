@@ -376,3 +376,24 @@ describe("labels for the live report", () => {
     expect(e.appeal).toBe("pathos");
   });
 });
+
+describe("the last listen, saved and restored (Max, 2026-10-07)", async () => {
+  const { snapshot, restore } = await import("../src/lib/saved.ts");
+  it("round-trips lines, labels, timing and sequence numbers", async () => {
+    const h = harness();
+    h.p.handleMessage(final("They are coming for your jobs right now."));
+    h.p.handleMessage(final("Good evening to all of you here."));
+    const r = scored(4.1, "r", true, "They are coming for your jobs right now.", false, ["coming for your jobs"]);
+    if (r.kind === "scored") { r.devices = [{ label: "Appeal to fear", kind: "fallacy", words: "coming for your jobs" }]; r.appeal = "pathos"; }
+    h.calls[0]!.d.resolve(r);
+    h.calls[1]!.d.resolve(scored(1.0, "greeting", false));
+    await tick();
+    const snap = snapshot(h.p.store, 0, 60000, null);
+    const back = restore(JSON.parse(JSON.stringify(snap)));
+    expect(back.scored().map((e) => [e.seq, e.text, e.score, e.marks, e.devices, e.appeal])).toEqual([
+      [0, "They are coming for your jobs right now.", 4.1, ["coming for your jobs"], [{ label: "Appeal to fear", kind: "fallacy", words: "coming for your jobs" }], "pathos"],
+    ]);
+    expect(back.get(1)!.status).toBe("noclaim");
+    expect(back.needle()).toBe(4.1);
+  });
+});

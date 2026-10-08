@@ -26,8 +26,11 @@ export class MeterStore {
   private entries = new Map<number, Entry>();
   private nextSeq = 0;
 
-  add(text: string, finalAt: number): Entry {
-    const e: Entry = { seq: this.nextSeq++, text, heard: text, finalAt, status: "pending" };
+  // `seq` is given only when restoring a saved listen, so its numbers survive.
+  add(text: string, finalAt: number, seq?: number): Entry {
+    const n = seq ?? this.nextSeq;
+    this.nextSeq = Math.max(this.nextSeq, n + 1);
+    const e: Entry = { seq: n, text, heard: text, finalAt, status: "pending" };
     this.entries.set(e.seq, e);
     return e;
   }

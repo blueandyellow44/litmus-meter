@@ -267,3 +267,4 @@ mark.hl-loaded {
   .report .rhead { grid-template-columns: 1fr; }
   .report .rverdict { text-align: left; }
 }
+.report .rescore { margin-top: 8px; min-height: 36px; font-size: 13px; padding: 0 12px; }

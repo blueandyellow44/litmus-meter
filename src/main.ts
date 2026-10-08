@@ -8,6 +8,8 @@ import type { Entry } from "./lib/meterStore.ts";
 import { Pipeline } from "./lib/pipeline.ts";
 import { writeMarked } from "./lib/dom.ts";
 import { Report } from "./lib/report.ts";
+import * as saved from "./lib/saved.ts";
+import type { MeterStore } from "./lib/meterStore.ts";
 
 const TICK_MS = 10_000;
 const BYTES_PER_SAMPLE = 2;
@@ -50,6 +52,7 @@ const el = {
   appeals: $("appeals"),
   appealKey: $("appeal-key"),
   moves: $("moves"),
+  rescore: $<HTMLButtonElement>("rescore"),
   fallacies: $("fallacies"),
   list: $<HTMLOListElement>("list"),
   minutes: $("minutes"),
@@ -60,7 +63,12 @@ const el = {
 let session: api.SessionInfo | null = null;
 // The pipeline whose speech the report is drawing: the live one, or the last
 // one after Stop so the report stays up as the recap.
-let reportPipeline: Pipeline | null = null;
+// A finished listen restored from this browser has a store but no pipeline.
+interface Speech {
+  store: MeterStore;
+  startedAt: number;
+}
+let reportPipeline: Speech | null = null;
 const report = new Report(
   { graph: el.graph, read: el.graphRead, appeals: el.appeals, appealKey: el.appealKey, moves: el.moves, fallacies: el.fallacies },
   () => reportPipeline?.store ?? null,
@@ -148,6 +156,8 @@ function renderAfterScore(pipeline: Pipeline, seq: number | null): void {
     el.reportSub.textContent = `Live needle ${value.toFixed(1)} ${bandLabel(value)}`;
   }
   if (reportPipeline === pipeline) report.render();
+  // Saved as it goes, so a reload mid-speech keeps what was heard.
+  if (running?.pipeline === pipeline) saved.save(saved.snapshot(store, pipeline.startedAt, performance.now() - pipeline.startedAt, null));
 
   const hot = store.hottest();
   if (hot) {
@@ -195,6 +205,7 @@ function resetDisplay(): void {
   el.synopsis.hidden = true;
   report.reset();
   el.report.hidden = false;
+  el.rescore.hidden = true;
   delete el.report.dataset.ended;
   el.reportKicker.textContent = "The speech so far";
   el.reportTitle.textContent = "Listening";
@@ -208,16 +219,26 @@ function resetDisplay(): void {
 
 // ── end-of-listen synopsis ───────────────────────────────────────────────────
 // Recap lines carry the marks the page already holds for that line.
-function proofItem(pipeline: Pipeline, l: api.SynopsisLine): HTMLLIElement {
+function proofItem(pipeline: Speech, l: api.SynopsisLine): HTMLLIElement {
   const li = document.createElement("li");
   li.append(rowHtml({ ...l, marks: pipeline.store.get(l.seq)?.marks ?? [], status: "scored" }));
   return li;
 }
 
+// Live Stop: finish the pipeline, ask for the report, show it, save it.
 async function showSynopsis(pipeline: Pipeline): Promise<void> {
+  beginRecap("What you just listened to");
+  await pipeline.finish();
+  const durationMs = performance.now() - pipeline.startedAt;
+  const result = await fetchReport(pipeline);
+  renderRecap(pipeline, result, durationMs);
+  saved.save(saved.snapshot(pipeline.store, pipeline.startedAt, durationMs, result));
+}
+
+function beginRecap(kicker: string): void {
   el.synopsis.hidden = false;
   el.report.dataset.ended = "1";
-  el.reportKicker.textContent = "What you just listened to";
+  el.reportKicker.textContent = kicker;
   el.reportTitle.textContent = "Adding it up\u2026";
   el.reportSub.textContent = "";
   el.synVerdict.textContent = "";
@@ -228,7 +249,10 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
   el.synCounts.textContent = "";
   el.synHot.replaceChildren();
   el.synCalm.replaceChildren();
-  await pipeline.finish();
+  el.rescore.hidden = true;
+}
+
+async function fetchReport(pipeline: Speech): Promise<api.Synopsis | null> {
   const lines = pipeline.store
     .scored()
     .reverse()
@@ -243,11 +267,19 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
     try {
       result = await api.synopsis(lines, pipeline.store.transcript());
     } catch (err) {
-      el.reportTitle.textContent = "The summary could not be made.";
       console.warn(err);
-      report.end();
-      return;
+      return null;
     }
+  }
+  return result;
+}
+
+function renderRecap(pipeline: Speech, result: api.Synopsis | null, durationMs: number, scroll = true): void {
+  el.rescore.hidden = false;
+  if (!result) {
+    el.reportTitle.textContent = "The summary could not be made.";
+    report.end();
+    return;
   }
   const s = result.summary;
   if (!s) {
@@ -265,7 +297,7 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
   // the plain line average follows so the listener can weigh both.
   el.synVerdict.textContent = v ? `${v.band} ${v.score.toFixed(1)}` : `${s.band} ${s.score.toFixed(1)}`;
   el.reportSub.textContent = v ? "Whole speech, scored the LITMUS way" : "Line average; the whole-speech score could not be made";
-  const minutes = Math.max(1, Math.round((performance.now() - pipeline.startedAt) / 60000));
+  const minutes = Math.max(1, Math.round(durationMs / 60000));
   el.reportTitle.textContent = `${minutes} minute${minutes === 1 ? "" : "s"}, ${s.lines} scored lines`;
   el.styleName.textContent = result.style_name ?? "No style name this time";
   // Retry-then-none, as on the site: no Why line beats a Why that cites nothing.
@@ -293,7 +325,7 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
   );
   el.synAllWrap.hidden = spoken.length === 0;
   report.end();
-  el.report.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (scroll) el.report.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ── messages ─────────────────────────────────────────────────────────────────
@@ -477,6 +509,56 @@ el.btnTab.addEventListener("click", () => void startSession("tab"));
 el.btnMic.addEventListener("click", () => void startSession("mic"));
 el.btnStop.addEventListener("click", () => stopSession());
 
+// ── the last listen, kept in this browser ───────────────────────────────────
+function showSaved(listen: saved.SavedListen): void {
+  const store = saved.restore(listen);
+  const speech: Speech = { store, startedAt: 0 };
+  reportPipeline = speech;
+  report.reset();
+  el.report.hidden = false;
+  beginRecap(`Your last listen, saved ${new Date(listen.savedAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`);
+  if (listen.result) renderRecap(speech, listen.result, listen.durationMs, false);
+  else {
+    el.reportTitle.textContent = "Interrupted before the end";
+    el.rescore.hidden = false;
+    report.end();
+  }
+}
+
+// Re-scores every saved line in order, with the same context the live meter
+// sends, at the original timing, then remakes the end report. Real calls:
+// about two cents a minute of speech.
+async function rescoreSaved(): Promise<void> {
+  const listen = saved.load();
+  if (!listen || running || budgetReached) return;
+  el.rescore.disabled = true;
+  el.rescore.textContent = "Re-scoring\u2026";
+  let clock = 0;
+  const pipeline: Pipeline = new Pipeline(api.scoreSentence, {
+    interim: () => {},
+    changed: () => report.render(),
+    cost: () => {},
+    warn: showWarn,
+    budget: () => showBudget(),
+  }, () => clock);
+  reportPipeline = pipeline;
+  report.reset();
+  beginRecap("Re-scored with the current meter");
+  for (const e of [...listen.entries].sort((a, b) => a.seq - b.seq)) {
+    clock = e.tMs;
+    pipeline.handleMessage({ type: "Results", is_final: true, speech_final: true, channel: { alternatives: [{ transcript: e.heard }] } });
+    pipeline.handleMessage({ type: "UtteranceEnd" });
+  }
+  await pipeline.finish();
+  const result = await fetchReport(pipeline);
+  renderRecap(pipeline, result, listen.durationMs);
+  saved.save(saved.snapshot(pipeline.store, 0, listen.durationMs, result));
+  el.rescore.disabled = false;
+  el.rescore.textContent = "Re-score this speech";
+}
+
+el.rescore.addEventListener("click", () => void rescoreSaved());
+
 // ── passcode gate ────────────────────────────────────────────────────────────
 async function showMeter(): Promise<void> {
   session = await api.getSession();
@@ -484,6 +566,8 @@ async function showMeter(): Promise<void> {
   el.gate.hidden = true;
   el.meter.hidden = false;
   applySpend(session);
+  const last = saved.load();
+  if (last && last.entries.length > 0 && !running) showSaved(last);
 }
 
 function showGate(): void {
