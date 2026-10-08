@@ -55,6 +55,7 @@ export function stubAnthropic(sleep: (ms: number) => Promise<void> = (ms) => new
             loaded_framing: hot.length > 2, emotional_open: false, fallacy_count: hot.length ? 1 : 0,
             one_sided_sourcing: false, advocacy_speech: false,
             why: `The heat came from lines like "${quote}".`,
+            style_name: hot.length > 2 ? "Grievance and victory" : "Briefing by the numbers",
             summary: `The speaker covered ${lines.length} lines of remarks. The speaker said a spending bill passed and described its funding. The speaker attacked critics and opponents. The speaker closed by handing back to the studio.`,
           },
         }],
@@ -72,6 +73,12 @@ export function stubAnthropic(sleep: (ms: number) => Promise<void> = (ms) => new
     // A line that starts lowercase picks up where the last one broke off.
     const continues = /^[a-z]/.test(sentence) && content.includes("Score this line:");
     const marks = sentence.match(new RegExp(HOT.source, "gi")) ?? [];
-    return { content: [{ type: "tool_use", name: SCORE_TOOL.name, input: { text, claim, score, reason, continues, marks } }], usage };
+    const devices = [];
+    if (/\b(we|our)\b/i.test(sentence) && /\b(they|them|critics)\b/i.test(sentence)) devices.push({ label: "Us vs. them", words: sentence.match(/\b(they|them|critics)\b/i)![0] });
+    if (marks[0] && /destroy|disaster|catastroph/i.test(marks[0])) devices.push({ label: "Appeal to fear", words: marks[0] });
+    if (marks[0] && /radical|reckless|disgrace|betray/i.test(marks[0])) devices.push({ label: "Name-calling", words: marks[0] });
+    if (/\d/.test(sentence)) devices.push({ label: "Citing the record", words: sentence.match(/[\d.,]+( percent| billion)?/)![0].trim() });
+    const appeal = !claim ? "none" : /\d/.test(sentence) ? "logos" : marks.length ? "pathos" : "ethos";
+    return { content: [{ type: "tool_use", name: SCORE_TOOL.name, input: { text, claim, score, reason, continues, marks, devices: devices.slice(0, 2), appeal } }], usage };
   };
 }

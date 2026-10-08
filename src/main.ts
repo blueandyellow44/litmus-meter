@@ -6,6 +6,8 @@ import { openDeepgram, type TranscriptSocket } from "./lib/deepgramSocket.ts";
 import { openFakeDeepgram } from "./lib/fakeDeepgram.ts";
 import type { Entry } from "./lib/meterStore.ts";
 import { Pipeline } from "./lib/pipeline.ts";
+import { writeMarked } from "./lib/dom.ts";
+import { Report } from "./lib/report.ts";
 
 const TICK_MS = 10_000;
 const BYTES_PER_SAMPLE = 2;
@@ -38,6 +40,17 @@ const el = {
   synAll: $<HTMLOListElement>("syn-all"),
   synAllCount: $("syn-all-count"),
   synAllWrap: $("syn-all-wrap"),
+  report: $("report"),
+  reportKicker: $("report-kicker"),
+  reportTitle: $("report-title"),
+  reportSub: $("report-sub"),
+  styleName: $("style-name"),
+  graph: $("graph"),
+  graphRead: $("graph-read"),
+  appeals: $("appeals"),
+  appealKey: $("appeal-key"),
+  moves: $("moves"),
+  fallacies: $("fallacies"),
   list: $<HTMLOListElement>("list"),
   minutes: $("minutes"),
   cost: $("cost"),
@@ -45,6 +58,14 @@ const el = {
 };
 
 let session: api.SessionInfo | null = null;
+// The pipeline whose speech the report is drawing: the live one, or the last
+// one after Stop so the report stays up as the recap.
+let reportPipeline: Pipeline | null = null;
+const report = new Report(
+  { graph: el.graph, read: el.graphRead, appeals: el.appeals, appealKey: el.appealKey, moves: el.moves, fallacies: el.fallacies },
+  () => reportPipeline?.store ?? null,
+  () => reportPipeline?.startedAt ?? 0,
+);
 let budgetReached = false;
 
 // ── gauge ────────────────────────────────────────────────────────────────────
@@ -63,29 +84,6 @@ function drawArcs(): void {
 // ── rendering ────────────────────────────────────────────────────────────────
 function setText(node: HTMLElement, text: string): void {
   node.textContent = text || " ";
-}
-
-// Writes `text` into `node` with each mark in the site's loaded highlight.
-// Built from text nodes, never innerHTML, so a transcript cannot inject markup.
-function writeMarked(node: HTMLElement, text: string, marks: string[] = []): void {
-  node.replaceChildren();
-  const lower = text.toLowerCase();
-  const spans = marks
-    .map((m) => [lower.indexOf(m.toLowerCase()), m.length] as const)
-    .filter(([at]) => at >= 0)
-    .sort((a, b) => a[0] - b[0]);
-  let i = 0;
-  for (const [at, len] of spans) {
-    if (at < i) continue; // overlapping marks were refused upstream; skip defensively
-    if (at > i) node.append(text.slice(i, at));
-    const mark = document.createElement("mark");
-    mark.className = "hl-loaded";
-    mark.textContent = text.slice(at, at + len);
-    node.append(mark);
-    i = at + len;
-  }
-  if (i < text.length) node.append(text.slice(i));
-  if (!text) node.textContent = "\u00a0";
 }
 
 function rowHtml(e: { seq: number; text: string; heard?: string; score?: number; reason?: string; marks?: string[]; lagMs?: number; status?: string }): HTMLElement {
@@ -146,6 +144,10 @@ function renderAfterScore(pipeline: Pipeline, seq: number | null): void {
   }
   const showing = store.needleSentence();
   writeMarked(el.showing, showing?.text ?? "", showing?.marks);
+  if (value !== null && reportPipeline === pipeline && !el.report.dataset.ended) {
+    el.reportSub.textContent = `Live needle ${value.toFixed(1)} ${bandLabel(value)}`;
+  }
+  if (reportPipeline === pipeline) report.render();
 
   const hot = store.hottest();
   if (hot) {
@@ -191,6 +193,16 @@ function resetDisplay(): void {
   el.needle.style.transform = "";
   el.gaugeValue.textContent = "Waiting for the first sentence";
   el.synopsis.hidden = true;
+  report.reset();
+  el.report.hidden = false;
+  delete el.report.dataset.ended;
+  el.reportKicker.textContent = "The speech so far";
+  el.reportTitle.textContent = "Listening";
+  el.synVerdict.textContent = "";
+  el.reportSub.textContent = "Waiting for the first scored line";
+  el.styleName.textContent = "Named when the speech ends";
+  el.synSummary.hidden = true;
+  el.synWhy.hidden = true;
   (window as unknown as { __meterLags: number[] }).__meterLags = [];
 }
 
@@ -204,7 +216,11 @@ function proofItem(pipeline: Pipeline, l: api.SynopsisLine): HTMLLIElement {
 
 async function showSynopsis(pipeline: Pipeline): Promise<void> {
   el.synopsis.hidden = false;
-  el.synVerdict.textContent = "Adding it up\u2026";
+  el.report.dataset.ended = "1";
+  el.reportKicker.textContent = "What you just listened to";
+  el.reportTitle.textContent = "Adding it up\u2026";
+  el.reportSub.textContent = "";
+  el.synVerdict.textContent = "";
   el.synSummary.textContent = "";
   el.synSummary.hidden = true;
   el.synAllWrap.hidden = true;
@@ -227,15 +243,18 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
     try {
       result = await api.synopsis(lines, pipeline.store.transcript());
     } catch (err) {
-      el.synVerdict.textContent = "The summary could not be made.";
+      el.reportTitle.textContent = "The summary could not be made.";
       console.warn(err);
+      report.end();
       return;
     }
   }
   const s = result.summary;
   if (!s) {
-    el.synVerdict.textContent = "Not enough was said to judge.";
-    el.synWhy.textContent = `Fewer than three lines made a claim.`;
+    el.reportTitle.textContent = "Not enough was said to judge.";
+    el.synWhy.textContent = "Fewer than three lines made a claim.";
+    el.synWhy.hidden = false;
+    report.end();
     return;
   }
   // What was said, before any verdict, as the site's facts panel comes first.
@@ -244,7 +263,11 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
   const v = result.verdict;
   // Two numbers, roles named: the whole speech scored the site's way leads;
   // the plain line average follows so the listener can weigh both.
-  el.synVerdict.textContent = v ? `${v.band}, ${v.score.toFixed(1)}` : `${s.band}, ${s.score.toFixed(1)} (line average)`;
+  el.synVerdict.textContent = v ? `${v.band} ${v.score.toFixed(1)}` : `${s.band} ${s.score.toFixed(1)}`;
+  el.reportSub.textContent = v ? "Whole speech, scored the LITMUS way" : "Line average; the whole-speech score could not be made";
+  const minutes = Math.max(1, Math.round((performance.now() - pipeline.startedAt) / 60000));
+  el.reportTitle.textContent = `${minutes} minute${minutes === 1 ? "" : "s"}, ${s.lines} scored lines`;
+  el.styleName.textContent = result.style_name ?? "No style name this time";
   // Retry-then-none, as on the site: no Why line beats a Why that cites nothing.
   el.synWhy.textContent = result.why ?? "";
   el.synWhy.hidden = !result.why;
@@ -269,7 +292,8 @@ async function showSynopsis(pipeline: Pipeline): Promise<void> {
     }),
   );
   el.synAllWrap.hidden = spoken.length === 0;
-  el.synopsis.scrollIntoView({ behavior: "smooth", block: "start" });
+  report.end();
+  el.report.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ── messages ─────────────────────────────────────────────────────────────────
@@ -353,7 +377,7 @@ async function startSession(source: "tab" | "mic"): Promise<void> {
   resetDisplay();
   // Created inside the click so mobile Safari allows audio to run.
   const ctx = session?.stub ? null : new AudioContext();
-  const pipeline = new Pipeline(api.scoreSentence, {
+  const pipeline: Pipeline = new Pipeline(api.scoreSentence, {
     interim: (t) => setText(el.interim, t),
     changed: (seq, mergedSeq) => {
       // The folded-in line leaves the list; the merged line takes its place.
@@ -385,6 +409,7 @@ async function startSession(source: "tab" | "mic"): Promise<void> {
     stubStartedAt: null,
   };
   running = r;
+  reportPipeline = pipeline;
   el.btnTab.hidden = true;
   el.btnMic.hidden = true;
   el.btnStop.hidden = false;

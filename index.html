@@ -42,22 +42,6 @@
         <p id="hint" class="hint" hidden>Pick the tab in the dialog and tick &ldquo;Share tab audio&rdquo;.</p>
         <p id="error" class="error" role="alert" hidden></p>
 
-        <section id="synopsis" class="synopsis" aria-live="polite" hidden>
-          <h2 class="label">What you just listened to</h2>
-          <p id="syn-summary" class="summary-para" hidden></p>
-          <p id="syn-verdict" class="verdict"></p>
-          <p id="syn-why" class="why"></p>
-          <p id="syn-counts" class="counts"></p>
-          <h3 class="label">The hottest lines</h3>
-          <ol id="syn-hot" class="proof"></ol>
-          <h3 class="label">The calmest lines</h3>
-          <ol id="syn-calm" class="proof"></ol>
-          <details id="syn-all-wrap" class="whole" hidden>
-            <summary id="syn-all-count">Read the whole speech</summary>
-            <ol id="syn-all" class="proof"></ol>
-          </details>
-        </section>
-
         <aside class="hottest">
           <h2 class="label">Hottest line so far</h2>
           <div id="hottest" class="row empty"><p class="sentence">Nothing scored yet.</p></div>
@@ -87,6 +71,47 @@
           <h2 class="label">Needle is showing</h2>
           <p id="showing" class="sentence">&nbsp;</p>
         </div>
+
+        <section id="report" class="report" aria-live="polite" hidden>
+          <div class="rhead">
+            <div>
+              <h2 class="label" id="report-kicker">The speech so far</h2>
+              <p id="report-title" class="rtitle">Listening</p>
+            </div>
+            <div class="rverdict">
+              <p id="syn-verdict" class="verdict"></p>
+              <p id="report-sub" class="rsub"></p>
+            </div>
+          </div>
+          <p id="syn-summary" class="summary-para" hidden></p>
+          <p id="syn-why" class="why" hidden></p>
+          <div id="graph" class="graph"></div>
+          <div id="graph-read" class="graph-read"><span class="label">Hover or tap the graph to read any moment</span></div>
+          <div class="panels">
+            <div class="panel">
+              <h3>Persuasive style</h3>
+              <p id="style-name" class="style-name">Appears when the speech ends</p>
+              <div id="appeals" class="appeals" aria-hidden="true"></div>
+              <div id="appeal-key" class="appeal-key"></div>
+              <p class="def">Share of scored lines leaning on each appeal.</p>
+            </div>
+            <div class="panel"><h3>Rhetorical moves</h3><div id="moves" class="rows"><p class="def">None yet.</p></div></div>
+            <div class="panel"><h3>Fallacies leaned on</h3><div id="fallacies" class="rows"><p class="def">None yet.</p></div></div>
+          </div>
+        </section>
+
+        <section id="synopsis" class="synopsis" hidden>
+          <h2 class="label">The evidence</h2>
+          <p id="syn-counts" class="counts"></p>
+          <h3 class="label">The hottest lines</h3>
+          <ol id="syn-hot" class="proof"></ol>
+          <h3 class="label">The calmest lines</h3>
+          <ol id="syn-calm" class="proof"></ol>
+          <details id="syn-all-wrap" class="whole" hidden>
+            <summary id="syn-all-count">Read the whole speech</summary>
+            <ol id="syn-all" class="proof"></ol>
+          </details>
+        </section>
 
         <ol id="list" class="list" aria-label="Scored sentences, newest first"></ol>
 

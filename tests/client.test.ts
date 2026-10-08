@@ -31,7 +31,7 @@ function harness() {
   return { p, calls, interims, changed };
 }
 
-const scored = (score: number, reason = "r", claim = true, text = "", continues = false, marks: string[] = []): ScoreResult => ({ kind: "scored", score, reason, claim, text, continues, marks, marksRaw: marks, costUsd: 0.002, warn: false });
+const scored = (score: number, reason = "r", claim = true, text = "", continues = false, marks: string[] = []): ScoreResult => ({ kind: "scored", score, reason, claim, text, continues, marks, marksRaw: marks, devices: [], devicesRaw: [], appeal: null, costUsd: 0.002, warn: false });
 
 describe("one scoring call per final sentence, none for interims", () => {
   it("interims update the live line and never score", () => {
@@ -356,5 +356,23 @@ describe("hyperbolic words underlined (Max, 2026-10-07)", () => {
     h.calls[1]!.d.resolve(scored(4.2, "r", true, "and they always have, total disaster.", true, ["hate this country", "total disaster", "invented words"]));
     await tick();
     expect(h.p.store.scored()[0]!.marks).toEqual(["hate this country", "total disaster"]);
+  });
+});
+
+describe("labels for the live report", () => {
+  it("a line keeps its devices and appeal; a merged line re-checks devices against the whole thought", async () => {
+    const h = harness();
+    h.p.handleMessage(final("They hate this country."));
+    h.p.handleMessage(final("and they will take your jobs."));
+    const r = scored(4.2, "r", true, "and they will take your jobs.", true, []);
+    if (r.kind === "scored") {
+      r.devicesRaw = [{ label: "Ad hominem", words: "hate this country" }, { label: "Made up", words: "jobs" }];
+      r.appeal = "pathos";
+    }
+    h.calls[1]!.d.resolve(r);
+    await tick();
+    const e = h.p.store.scored()[0]!;
+    expect(e.devices).toEqual([{ label: "Ad hominem", kind: "fallacy", words: "hate this country" }]);
+    expect(e.appeal).toBe("pathos");
   });
 });

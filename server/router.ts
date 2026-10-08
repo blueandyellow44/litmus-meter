@@ -9,6 +9,7 @@ import { acceptCorrection, buildRequest, parseContext, MAX_SENTENCE_CHARS, realA
 import { ledgerFor, spendState, type SpendLedger, type SpendStore } from "./spend.ts";
 import { isLocalHost, stubAnthropic } from "./stub.ts";
 import { validateMarks } from "./marks.ts";
+import { parseAppeal, validateDevices } from "./labels.ts";
 import { buildVerdictRequest, parseLines, parseTranscript, summarize, verdictInput, whyQuotesALine } from "./synopsis.ts";
 import { computeVerdict, parseVerdict, type Verdict } from "./verdict.ts";
 
@@ -155,6 +156,9 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         // re-checks them against the whole merged thought.
         marks: valid.claim ? validateMarks(shown, valid.marks) : [],
         marks_raw: valid.claim && Array.isArray(valid.marks) ? valid.marks.filter((m) => typeof m === "string").slice(0, 3) : [],
+        devices: valid.claim ? validateDevices(shown, valid.devices) : [],
+        devices_raw: valid.claim && Array.isArray(valid.devices) ? valid.devices.slice(0, 2) : [],
+        appeal: valid.claim ? parseAppeal(valid.appeal) : null,
         score: valid.score,
         reason: valid.reason,
         cost_usd: cost,
@@ -177,6 +181,7 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
       let verdict: (Verdict & { dims: unknown }) | null = null;
       let why: string | null = null;
       let summaryText: string | null = null;
+      let styleName: string | null = null;
       let cost = 0;
       let problem: string | null = null;
       for (let attempt = 0; attempt < 2 && !(verdict && why); attempt++) {
@@ -197,6 +202,7 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         // A good verdict from an earlier try is kept; a retry only improves the Why.
         if (!verdict) verdict = { ...computeVerdict(parsed.value.dims, parsed.value.flags), dims: parsed.value.dims };
         summaryText = summaryText ?? parsed.value.summary;
+        styleName = styleName ?? parsed.value.styleName;
         if (whyQuotesALine(parsed.value.why, transcript)) why = parsed.value.why;
         else {
           problem = "why did not quote three consecutive words of the transcript";
@@ -204,7 +210,7 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
         }
       }
       deps.waitUntil(deps.ledger.charge(cost));
-      return json({ summary, verdict, why, summary_text: summaryText, cost_usd: cost, ...spendState(before + cost) });
+      return json({ summary, verdict, why, summary_text: summaryText, style_name: styleName, cost_usd: cost, ...spendState(before + cost) });
     }
 
     return json({ error: "not found" }, 404);

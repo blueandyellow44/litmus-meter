@@ -4,6 +4,7 @@ import { acceptCorrection, validateToolOutput } from "../server/score.ts";
 import { summarize, whyQuotesALine, type ScoredLine } from "../server/synopsis.ts";
 import { computeVerdict, parseVerdict } from "../server/verdict.ts";
 import { validateMarks } from "../server/marks.ts";
+import { parseAppeal, validateDevices } from "../server/labels.ts";
 import { env, makeDeps, MemoryStore, PASSCODE, req } from "./helpers.ts";
 import { SPEND_KEY } from "../server/spend.ts";
 import type { AnthropicResponse } from "../server/score.ts";
@@ -213,5 +214,42 @@ describe("paragraph summary", () => {
   it("is optional: a missing summary does not refuse a sound verdict", () => {
     const r = parseVerdict(base);
     expect(r.ok && r.value.summary).toBeNull();
+  });
+});
+
+describe("move and fallacy labels", () => {
+  const line = 'They are sick people, and the press said "a total disaster", so vote on Tuesday.';
+  it("keeps labels from the fixed lists whose words are verbatim and unquoted", () => {
+    expect(validateDevices(line, [{ label: "Name-calling", words: "sick people" }, { label: "Direct ask", words: "vote on Tuesday" }])).toEqual([
+      { label: "Name-calling", kind: "move", words: "sick people" },
+      { label: "Direct ask", kind: "move", words: "vote on Tuesday" },
+    ]);
+    expect(validateDevices(line, [{ label: "Ad hominem", words: "sick people" }])[0]!.kind).toBe("fallacy");
+  });
+  it("refuses invented labels, invented or quoted words, duplicates and more than two", () => {
+    expect(validateDevices(line, [{ label: "Gaslighting", words: "sick people" }])).toEqual([]);
+    expect(validateDevices(line, [{ label: "Ad hominem", words: "evil people" }])).toEqual([]);
+    expect(validateDevices(line, [{ label: "Appeal to fear", words: "total disaster" }])).toEqual([]);
+    expect(validateDevices(line, [{ label: "Ad hominem", words: "sick" }, { label: "Ad hominem", words: "people" }])).toHaveLength(1);
+    expect(validateDevices(line, [{ label: "Ad hominem", words: "sick" }, { label: "Name-calling", words: "people" }, { label: "Direct ask", words: "vote" }])).toHaveLength(2);
+    expect(validateDevices(line, "Ad hominem")).toEqual([]);
+  });
+  it("accepts only the three appeals", () => {
+    expect(parseAppeal("pathos")).toBe("pathos");
+    expect(parseAppeal("none")).toBeNull();
+    expect(parseAppeal("kairos")).toBeNull();
+  });
+});
+
+describe("style name", () => {
+  const base = { framing: 3, language: 3, sourcing: 2, fallacies: 2, structure: 2, loaded_framing: false, emotional_open: false, fallacy_count: 0, one_sided_sourcing: false, advocacy_speech: true, why: "x" };
+  it("keeps two to six words, drops a trailing period", () => {
+    const r = parseVerdict({ ...base, style_name: "Grievance and victory." });
+    expect(r.ok && r.value.styleName).toBe("Grievance and victory");
+  });
+  it("drops a style name over six words, and its absence refuses nothing", () => {
+    const r = parseVerdict({ ...base, style_name: "a very long name that goes on and on" });
+    expect(r.ok && r.value.styleName).toBeNull();
+    expect(parseVerdict(base).ok).toBe(true);
   });
 });

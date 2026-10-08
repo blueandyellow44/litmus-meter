@@ -98,6 +98,17 @@ export interface ParsedVerdict {
   flags: VerdictFlags;
   why: string;
   summary: string | null;
+  styleName: string | null;
+}
+
+const MAX_STYLE_WORDS = 6;
+
+// Optional like the summary; over six words or empty and it is left out.
+function cleanStyle(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().replace(/[."]+$/g, "").replace(/\u2014/g, ", ");
+  if (!t || t.split(/\s+/).length > MAX_STYLE_WORDS) return null;
+  return t;
 }
 
 const MAX_SUMMARY_CHARS = 1200;
@@ -144,6 +155,7 @@ export function parseVerdict(input: unknown): { ok: true; value: ParsedVerdict }
       },
       why: i.why.trim().replace(/—/g, ", ").slice(0, 400),
       summary: cleanSummary(i.summary),
+      styleName: cleanStyle(i.style_name),
     },
   };
 }

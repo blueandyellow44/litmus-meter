@@ -2,6 +2,7 @@
 // automatically (same origin, HttpOnly).
 
 import type { ScoreResult } from "./pipeline.ts";
+import type { Appeal, Device } from "../../server/labels.ts";
 
 export interface SpendFields {
   total_usd: number;
@@ -63,6 +64,9 @@ export async function scoreSentence(text: string, context: string[] = []): Promi
       continues: body.continues === true,
       marks: Array.isArray(body.marks) ? (body.marks as unknown[]).filter((m): m is string => typeof m === "string") : [],
       marksRaw: Array.isArray(body.marks_raw) ? (body.marks_raw as unknown[]).filter((m): m is string => typeof m === "string") : [],
+      devices: Array.isArray(body.devices) ? (body.devices as Device[]) : [],
+      devicesRaw: Array.isArray(body.devices_raw) ? (body.devices_raw as unknown[]) : [],
+      appeal: typeof body.appeal === "string" ? (body.appeal as Appeal) : null,
       costUsd: Number(body.cost_usd) || 0,
       warn: body.warn === true,
     };
@@ -90,6 +94,7 @@ export interface Synopsis {
   verdict: { score: number; band: string; raised: string[] } | null;
   why: string | null;
   summary_text: string | null;
+  style_name: string | null;
 }
 
 export async function synopsis(lines: SynopsisLine[], transcript: string[]): Promise<Synopsis> {

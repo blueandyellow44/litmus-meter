@@ -7,9 +7,10 @@
 import { MeterStore } from "./meterStore.ts";
 import { SentenceAssembler } from "./sentences.ts";
 import { validateMarks } from "../../server/marks.ts";
+import { validateDevices, type Appeal, type Device } from "../../server/labels.ts";
 
 export type ScoreResult =
-  | { kind: "scored"; score: number; reason: string; claim: boolean; text: string; continues: boolean; marks: string[]; marksRaw: string[]; costUsd: number; warn: boolean }
+  | { kind: "scored"; score: number; reason: string; claim: boolean; text: string; continues: boolean; marks: string[]; marksRaw: string[]; devices: Device[]; devicesRaw: unknown[]; appeal: Appeal | null; costUsd: number; warn: boolean }
   | { kind: "dropped"; costUsd: number; warn: boolean }
   | { kind: "budget" };
 
@@ -38,12 +39,16 @@ export class Pipeline {
   private stopped = false;
   private inFlight = new Set<Promise<void>>();
   private recent: string[] = [];
+  // When listening began, so the report can place each line in time.
+  readonly startedAt: number;
 
   constructor(
     private readonly score: ScoreFn,
     private readonly hooks: PipelineHooks,
     private readonly now: () => number = () => performance.now(),
-  ) {}
+  ) {
+    this.startedAt = now();
+  }
 
   stop(): void {
     this.stopped = true;
@@ -123,7 +128,8 @@ export class Pipeline {
     // On a merge the marks may sit in either half, so they are re-checked
     // against the whole thought; otherwise the server already checked them.
     const marks = mergedSeq === undefined ? result.marks : validateMarks(shown, result.marksRaw);
-    this.store.resolve(seq, result.score, result.reason, result.claim, shown, marks);
+    const devices = mergedSeq === undefined ? result.devices : validateDevices(shown, result.devicesRaw);
+    this.store.resolve(seq, result.score, result.reason, result.claim, shown, marks, devices, result.appeal);
     this.hooks.changed(seq, mergedSeq);
   }
 }

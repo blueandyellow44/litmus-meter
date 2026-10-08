@@ -6,6 +6,8 @@
 // listed as not scored and never touches the needle, the hottest line or the
 // synopsis. Before 2026-10-07 such lines scored 1.0 and held the needle flat.
 
+import type { Appeal, Device } from "../../server/labels.ts";
+
 export interface Entry {
   seq: number;
   text: string; // what the screen shows: heard text, or a guarded proper-noun fix
@@ -15,6 +17,8 @@ export interface Entry {
   score?: number;
   reason?: string;
   marks?: string[]; // the speaker's own hyperbolic words in `text`, verbatim
+  devices?: Device[]; // moves and fallacies, each with the words that show it
+  appeal?: Appeal | null;
   lagMs?: number;
 }
 
@@ -28,12 +32,23 @@ export class MeterStore {
     return e;
   }
 
-  resolve(seq: number, score: number, reason: string, claim = true, shownText?: string, marks: string[] = []): Entry | null {
+  resolve(
+    seq: number,
+    score: number,
+    reason: string,
+    claim = true,
+    shownText?: string,
+    marks: string[] = [],
+    devices: Device[] = [],
+    appeal: Appeal | null = null,
+  ): Entry | null {
     const e = this.entries.get(seq);
     if (!e || e.status !== "pending") return null;
     if (shownText) e.text = shownText;
     e.reason = reason;
     e.marks = claim ? marks : [];
+    e.devices = claim ? devices : [];
+    e.appeal = claim ? appeal : null;
     if (!claim) {
       e.status = "noclaim";
       return e;
