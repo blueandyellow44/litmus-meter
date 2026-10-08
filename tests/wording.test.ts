@@ -25,3 +25,13 @@ describe("retired scale words", () => {
     expect(hits).toEqual([]);
   });
 });
+
+describe("the rubric never rules on truth (Max, 2026-10-07)", () => {
+  it("both prompts forbid calling a claim true or false, and silo relayed speech without quotation marks", async () => {
+    const { SYSTEM_PROMPT, VERDICT_PROMPT } = await import("../server/rubric.ts");
+    for (const p of [SYSTEM_PROMPT, VERDICT_PROMPT]) {
+      expect(p).toContain("NEVER RULE ON TRUTH");
+      expect(p).toMatch(/without quotation marks|has no quotation marks/);
+    }
+  });
+});

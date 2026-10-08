@@ -22,7 +22,10 @@
 //   (d) after Max's first live test (2026-10-07): a claim flag, so greetings
 //       and broken fragments are not scored as 1.0 and do not drag the needle,
 //       and permission to fix a misheard proper noun ("Strait of Hormones"),
-//       which server/score.ts accepts only within a narrow guard.
+//       which server/score.ts accepts only within a narrow guard;
+//   (e) 2026-10-07, from the debate scores Max approved: the model never
+//       rules on truth ("a false quote" appeared in a Why), and relayed
+//       speech is siloed even without quotation marks.
 // The model returns the score directly; LITMUS computes its composite from five
 // dimensions in code, which a single sentence cannot support.
 
@@ -64,7 +67,8 @@ RULES:
 - Serious topics are not hyperbolic speech. A sentence about a war can score 1.2 if the language is restrained.
 - Describing is not editorializing. An accurate, checkable characterization of something that happened is reporting.
 - A sourced superlative is a fact ("the largest single-day fall since 2008").
-- QUOTED SPEECH IS SILOED. When the speaker reports someone else's words ("quote", "he said", "in her words", quotation marks), those words are not the speaker's framing. Remove them, then score only what remains: the speaker's own verbs, adjectives, and characterization around the quote. Reporting that a senator called a bill "a catastrophe" is a plain attribution.
+- QUOTED SPEECH IS SILOED. When the speaker reports someone else's words ("quote", "he said", "in her words", quotation marks), those words are not the speaker's framing. Remove them, then score only what remains: the speaker's own verbs, adjectives, and characterization around the quote. Reporting that a senator called a bill "a catastrophe" is a plain attribution. A spoken transcript has no quotation marks: when the speaker relays what someone else said ("All he said was it's not that serious, just inject a little bleach in your arm", "he told us..."), the relayed words are siloed all the same, and only the speaker's own framing around them counts ("All he said was" is mild framing). Do not mark the relayed words, and do not tag them as the speaker's own device.
+- NEVER RULE ON TRUTH. You judge how something is said, never whether it is true. In reason, never call a claim true, false, a lie, misleading, or a false quote; describe the words, not their accuracy.
 - UNFINISHED LINES. Speech is messy; a line can trail off or restart mid-sentence. Score the words that are there for how they are said. Never score a line low only because it is unfinished.
 - CLAIM. Always give the score the words earn, whatever you set here. Set claim false for a greeting, filler, an aside, a sign-off, a compliment to someone in the room, or a broken piece that asserts nothing ("That was the end of that.", "I love that goat.", "It's already... And again, remember this."). A claim-false line is listed as not scored and does not count toward the needle or the verdict. Anything that says something about people, events, policy, threats, opponents or the country is a claim, even when it is unfinished or rambling ("They hate America", "Let them take out Los Angeles").
 - TRANSCRIPT ERRORS. The sentence comes from live speech recognition. In "text", return the sentence verbatim, except fix an obvious mishearing of a proper noun (a place, person, group, or law), such as "Strait of Hormones" for "Strait of Hormuz". Change nothing else: no grammar, no other words, no punctuation. Score the corrected sentence.
@@ -122,7 +126,9 @@ YOU DO NOT REPORT A SCORE. The number is computed from the five dimensions and t
 
 The transcript comes from live speech recognition: lines can be broken, run together or misheard. Judge the speech as a whole, as a listener would hear it. A thought split across lines is one thought.
 
-QUOTED SPEECH IS SILOED. Words the speaker attributes to someone else ("quote", "he said", "they say") are not the speaker's framing. Only the speaker's own words move the dimensions.
+QUOTED SPEECH IS SILOED. Words the speaker attributes to someone else ("quote", "he said", "they say") are not the speaker's framing, with or without quotation marks; a spoken transcript has none. Only the speaker's own words move the dimensions.
+
+NEVER RULE ON TRUTH. You judge how the speech is said, never whether its claims are true. In why and summary, never call a claim true, false, a lie, misleading, or a false quote; attribute claims to the speaker and describe the words.
 
 THE FIVE DIMENSIONS (each 1.0-5.0, one decimal). Use the anchors; a 4 is a normal score for speech that earns it.
 
