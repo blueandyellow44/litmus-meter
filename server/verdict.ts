@@ -13,7 +13,8 @@
 //   emotional_lede  -> emotional_open: alarm or grievance before facts
 //                      (floors structure at 3.0)
 //   opinion_column  -> advocacy_speech: a rally, stump speech or other speech
-//                      made to persuade (floors the composite at 2.5)
+//                      made to persuade (a label only; its 2.5 floor was
+//                      removed from the site and from here on 2026-10-10)
 //   register        -> always "news": political speech gets no exemption.
 
 import { bandOf } from "./synopsis.ts";
@@ -45,7 +46,6 @@ const LANGUAGE_WEIGHT = 2; // news register, as on the site
 const FRAMING_WEIGHT = 2;
 const PAIR_FLOOR = 3.5;
 const EXTREME_PAIR = 4.5;
-const ADVOCACY_FLOOR = 2.5;
 const FLAG_FLOOR = 3.0;
 
 export function fallacyFloor(count: number): number {
@@ -82,10 +82,15 @@ export function computeVerdict(d: VerdictDimensions, f: VerdictFlags): Verdict {
     value = EXTREME_PAIR;
     raised.push("alarm framing together with extreme language");
   }
-  if (f.advocacySpeech && value < ADVOCACY_FLOOR) {
-    value = ADVOCACY_FLOOR;
-    raised.push("a speech made to persuade");
-  }
+  // No floor for a speech made to persuade (removed 2026-10-10). It was the
+  // site's opinion-column floor carried over, and Max ruled against both:
+  // "Even if I'm being persuasive, doesn't mean that I'm being hyperbolic. You
+  // can be persuasive and grounded."
+  // Every speech this meter hears is made to persuade, so the floor told
+  // speakers apart by nothing and only moved the bottom of the scale to 2.5:
+  // in the 2026-10-10 era check it put 14 of 29 debate answers at exactly 2.5,
+  // answers that read 1.8 to 2.5 on their language. advocacySpeech stays on
+  // the record as a label; it no longer moves the score.
   const score = Math.max(1, Math.min(5, Math.round(value * 10) / 10));
   return { score, band: bandOf(score), base: Math.round(base * 100) / 100, raised };
 }

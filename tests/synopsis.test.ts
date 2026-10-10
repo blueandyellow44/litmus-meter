@@ -63,12 +63,14 @@ describe("whole-speech verdict, the site's composite", () => {
     // (2*3 + 2*4 + 2 + 2 + 2) / 7 = 20/7 = 2.857 -> 2.9
     expect(computeVerdict({ framing: 3, language: 4, sourcing: 2, fallacies: 2, structure: 2 }, flags).score).toBe(2.9);
   });
-  it("applies the site's floors: fallacies, one-sided sourcing, the pair floors, advocacy", () => {
+  it("applies the site's floors: fallacies, one-sided sourcing, the pair floors; none for advocacy", () => {
     const calm = { framing: 1, language: 1, sourcing: 1, fallacies: 1, structure: 1 };
     expect(computeVerdict(calm, { ...flags, fallacyCount: 3 }).raised).toContain("3 distinct logical fallacies");
     expect(computeVerdict(calm, { ...flags, loadedFraming: true, emotionalOpen: true }).score).toBe(3.5);
     expect(computeVerdict({ ...calm, framing: 4.5, language: 4.5 }, flags).score).toBe(4.5);
-    expect(computeVerdict(calm, { ...flags, advocacySpeech: true }).score).toBe(2.5);
+    // Max, 2026-10-10: persuasive is not hyperbolic. No floor for advocacy.
+    expect(computeVerdict(calm, { ...flags, advocacySpeech: true }).score).toBe(computeVerdict(calm, flags).score);
+    expect(computeVerdict(calm, { ...flags, advocacySpeech: true }).raised).not.toContain("a speech made to persuade");
     expect(computeVerdict(calm, flags).score).toBe(1.0);
   });
   it("refuses answers that break the binding rules, like the site", () => {

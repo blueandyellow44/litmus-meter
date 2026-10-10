@@ -146,7 +146,7 @@ THE FLAGS:
 - emotional_open: true if the speech puts alarm, grievance or an enemy before any fact.
 - fallacy_count: distinct fallacies in the speaker's own reasoning.
 - one_sided_sourcing: true only if a contested claim is advanced with the other side absent or only mocked.
-- advocacy_speech: true for a rally, stump speech, campaign or advocacy speech, made to persuade (the site's opinion-column floor).
+- advocacy_speech: true for a rally, stump speech, campaign or advocacy speech, made to persuade. A label only: it does not move the score. Persuasive is not hyperbolic; a calm, well-supported argument scores low.
 
 USE THE WHOLE SCALE. A campaign rally that attacks opponents with epithets is routinely 3.5-4.5. A calm briefing is 1.0-2.0. Do not average toward the middle.
 
