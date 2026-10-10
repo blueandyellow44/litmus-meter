@@ -1,69 +1,99 @@
-# LITMUS Live (meter v1)
+# LITMUS Live
 
-A standalone page that listens to broadcast audio (a Chrome tab or a microphone) and moves a needle on the LITMUS P/H scale, Proportionate to Hyperbolic, one sentence at a time. Separate from the LITMUS site and repo.
+A live meter for broadcast speech. It listens to a speech, a debate or a newscast and moves a needle from Proportionate to Hyperbolic, one sentence at a time. When you stop listening, it writes a report on the whole speech.
+
+It is the spoken-word companion to [LITMUS](https://github.com/blueandyellow44/litmus), a news reader that scores every story for how it is told. The meter uses the same scale and the same rubric, adapted for one sentence of speech.
+
+![The meter while a speech is playing](docs/meter.jpg)
+
+## What it does
+
+The meter scores how something is said. It never scores the position the speaker takes, and it never rules on whether a claim is true. A calm sentence from either side reads the same on the needle.
+
+Three rules carry most of the judgment.
+
+- The speaker is scored on their own words. When a speaker repeats what someone else said, those words do not count against the speaker.
+- A serious subject is not hyperbole. Describing a disaster plainly scores low.
+- Greetings, asides and broken fragments carry no claim, so they are left out and do not drag the needle toward calm.
+
+While you listen, the words doing the pushing are underlined, and the hottest line so far stays pinned at the top with the reason for its score.
+
+![The report written when the listening stops](docs/report.jpg)
+
+The report charts the heat of the speech over time, names its persuasive style, and lists the rhetorical moves and fallacies the speaker leaned on, each with the line it came from.
+
+The scoring is imperfect. A model reads each sentence with a few lines of context, and it will sometimes misjudge a misheard name or a sentence cut in half. The design choices below exist to keep those misses small and visible.
 
 ## How it works
 
-1. Passcode screen. `POST /api/login` checks `METER_PASSCODE` and sets an HttpOnly, 12-hour session cookie. Every other `/api` route returns 401 without it.
-2. The browser captures audio, turns it into 16 kHz PCM (`public/pcm-worklet.js`) and streams it to Deepgram over a WebSocket opened with a 30-second JWT from `POST /api/deepgram-token`. The Deepgram key never reaches the browser.
-3. Interim transcripts fill the "Speaker now" line and are never scored. Each sentence completed by a FINAL transcript is sent on its own to `POST /api/score`, which asks `claude-haiku-4-5` for `{ text, score, reason }` through a forced tool call. Requests run in parallel; answers are placed by sentence order.
-4. The needle shows the average of the two latest-spoken scored sentences, with a 600 ms transition.
+```
+tab or microphone audio -> 16 kHz PCM -> Deepgram streaming -> sentence builder
+    -> Claude Haiku, one call per sentence -> needle, underlines, report
+```
 
-The rubric is in `server/rubric.ts`; its header names the LITMUS source file and commit.
+1. The browser captures audio from a Chrome tab or a microphone and converts it to 16 kHz PCM in an audio worklet.
+2. The audio streams to Deepgram over a WebSocket. The browser opens it with a token that lasts 30 seconds, minted by the server, so the Deepgram key never reaches the page.
+3. Interim transcripts fill the "Speaker now" line and are never scored. Finished sentences go to the server one at a time.
+4. The server asks Claude Haiku 4.5 for a score, a reason and labels through a forced tool call. Requests run in parallel and the answers are placed in spoken order.
+5. The needle shows the average of the two most recent scored sentences.
+6. At the end, the model judges the whole transcript on five dimensions and the server computes the final number in code. The model never picks the number.
 
-## Prices (checked 2026-10-07)
+It runs on Cloudflare Pages with Pages Functions and one KV key. There is no database and no server to keep awake.
+
+## Engineering notes
+
+**A spend cap that fails closed.** Every paid call is counted. The server reads token usage from each Claude response, including responses it throws away as malformed, and counts Deepgram minutes from what the browser reports. At $40 the page shows a warning. At $50 the server refuses to mint tokens or score. A corrupt stored total returns an error and never reads as zero. KV allows one write per second per key, so charges are batched into one write every 1.5 seconds, and the cap check includes charges not yet written.
+
+**Keys stay on the server.** The page is behind a passcode. The session cookie is an expiry time signed with HMAC, so the server holds no session state and changing the passcode ends every session. The passcode check runs in constant time.
+
+**A stub mode for free local work.** With `STUB_MODE=1` the server fakes Deepgram and Claude with realistic delays, usage numbers and an occasional malformed answer, and the page plays a scripted broadcast through the real pipeline. Stub mode is refused on any host other than localhost. The screenshots above come from it.
+
+**Tests.** 92 tests cover the sentence builder, the scoring guards, the spend cap, the session cookie and the wording of the rubric. `npm test` type-checks and runs them.
+
+**Decisions are written where they apply.** Comments in the code record why a rule exists and the live test that produced it, so a later change does not quietly undo it.
+
+## Cost
+
+Prices checked 2026-10-07.
 
 | Item | Rate | Source |
 |---|---|---|
-| Deepgram Nova-3 English streaming, Pay As You Go | **$0.0077/min regular**; $0.0048/min "limited-time promotional" current price, no end date stated | https://deepgram.com/pricing |
-| Claude Haiku 4.5 | $1 / MTok input, $5 / MTok output | https://platform.claude.com/docs/en/about-claude/pricing |
+| Deepgram Nova-3 English streaming, pay as you go | $0.0077 per minute | https://deepgram.com/pricing |
+| Claude Haiku 4.5 | $1 per million input tokens, $5 per million output | https://platform.claude.com/docs/en/about-claude/pricing |
 
-The spend cap charges Deepgram at the regular $0.0077/min, so it over-counts while the promotion lasts rather than under-counting when it ends. Rates live in `server/prices.ts`.
+An hour of listening costs about $2.50, measured on the deployed meter. Deepgram is about $0.46 of that. Scoring is about $0.0035 a sentence, and broadcast speech runs near ten sentences a minute. The report adds about a cent. Rates live in `server/prices.ts`.
 
-Estimated cost per hour of listening: about **$2.50** (range $2 to $3.50), re-measured 2026-10-07 on the deployed meter.
-- Deepgram: 60 min x $0.0077 = $0.46.
-- Scoring: about $0.0035 per line, measured on a live call. The prompt grew tonight (context lines, underlines, move and fallacy labels, appeal), roughly doubling the first estimate. Broadcast speech runs about 10 lines a minute, so about $2.10 an hour; fast speech more.
-- The end report: about a cent per listen.
-- At that rate the $50 cap is roughly 15 to 25 hours of listening.
-
-## Spend cap
-
-Running total in KV key `spend_total_usd`. Before minting a Deepgram token or making a scoring call the server checks it: at $50.00 it refuses with "Meter budget reached"; at $40.00 the page shows a warning banner. `GET /api/spend` (passcode-protected) returns the total.
-
-- Anthropic cost comes from the `usage` fields of every response, including responses the meter drops as malformed.
-- Deepgram cost comes from audio seconds the browser reports every 10 s (`POST /api/listen-tick`, at most 60 s per report). The browser talks to Deepgram directly, so the server cannot count the audio itself.
-- KV allows one write per second per key and has no atomic add, so charges are batched per isolate into one write every 1.5 s, and the cap check counts charges not yet written. Two isolates flushing in the same instant can still lose one flush (cents).
-- A corrupt stored total fails closed (500), never reads as $0.
-- Runs on Workers Paid (confirmed by Max 2026-10-07): 1 million KV writes a month included. The meter writes about 600 times an hour of listening. The Free plan's 1,000 writes a day would last about 1.5 hours.
-
-## Local run (stubbed, no paid calls)
+## Run it locally
 
 ```sh
 npm install
-cp .dev.vars.example .dev.vars   # set METER_PASSCODE, and STUB_MODE=1
-npm test                         # typecheck + 40 unit tests
+cp .dev.vars.example .dev.vars   # set METER_PASSCODE and STUB_MODE=1
+npm test
 npm run dev                      # http://127.0.0.1:8788
 ```
 
-With `STUB_MODE=1` the server fakes Deepgram and Anthropic (realistic delays and usage numbers, and about one malformed answer in eleven), and the page plays a scripted broadcast through the real pipeline. Stub mode is refused on any host other than localhost. The stub's scores come from a keyword list and say nothing about the real rubric. Tick "Show lag" to see final-transcript-to-display time per sentence.
+Stub mode makes no paid calls. Tick "Show lag" to see the time from a finished transcript to the screen for each sentence.
 
-## Deploy
-
-Deployed 2026-10-07 on Max's word ("deploy it") to https://litmus-meter.pages.dev (Pages project `litmus-meter`, KV `METER_KV`). The production passcode is in `.meter-passcode` (git-ignored), never in chat or git. To redeploy: `npm run deploy`.
-
-First-time setup, for reference:
+## Deploy your own
 
 ```sh
-# 1. Create the Pages project and the KV namespace (writes the id into wrangler.toml)
-./scripts/create-project.sh
-
-# 2. Set the three secrets (each prompts for the value)
+./scripts/create-project.sh      # creates the Pages project and the KV namespace
 npx wrangler pages secret put DEEPGRAM_API_KEY --project-name litmus-meter
 npx wrangler pages secret put ANTHROPIC_API_KEY --project-name litmus-meter
 npx wrangler pages secret put METER_PASSCODE --project-name litmus-meter
-
-# 3. Deploy
 npm run deploy
 ```
 
-The Deepgram key needs at least Member permission to mint tokens.
+The Deepgram key needs Member permission to mint tokens. The spend cap needs the Workers Paid plan, because the meter writes to KV about 600 times an hour and the free plan allows 1,000 writes a day.
+
+## Layout
+
+- `server/` holds the API. `rubric.ts` is the scale and the prompt, `score.ts` and `verdict.ts` are the guards around the model, `spend.ts` is the cap.
+- `src/` holds the page. `lib/sentences.ts` builds sentences from transcripts and `lib/pipeline.ts` keeps answers in order.
+- `functions/` is the Pages Functions entry point.
+- `design/` holds the mockups the interface was chosen from.
+- `tests/` holds the tests.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

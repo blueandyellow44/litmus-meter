@@ -1,8 +1,7 @@
 // The LITMUS P/H rubric, adapted for one spoken sentence.
 //
-// SOURCE: ~/LITMUS2/litmus-server/src/scoring/calibration.ts
-//   file last changed in 8a016e7bcc372fe3c24031470d2529483a2dd3a9 (2026-10-02)
-//   copied at repo HEAD c769c12bd7117942d27a99a25fbc816b54b6cfd9 (2026-10-07)
+// SOURCE: litmus-server/src/scoring/calibration.ts in the LITMUS repo
+//   (github.com/blueandyellow44/litmus), as it stood on 2026-10-07.
 //   Copied: the 1.0–5.0 scale, the five band boundaries, the five band
 //   descriptions, and the calibration rules that apply to a single sentence
 //   (use the whole scale; serious topic is not hyperbolic coverage; describing

@@ -1,7 +1,8 @@
 // The whole-listen verdict, scored the way the LITMUS site scores an article
 // (Max, 2026-10-07: "the goal is to have this mimic what the website does").
 //
-// SOURCE: ~/LITMUS2/litmus-server/src/scoring/composite.ts at c769c12
+// SOURCE: litmus-server/src/scoring/composite.ts in the LITMUS repo
+// (github.com/blueandyellow44/litmus), as it stood on 2026-10-07
 // (weightedBase, fallacyFloor, applyFloors, computeComposite), and the binding
 // rules in calibration.ts. The model judges five dimensions and sets flags;
 // the number is computed here, never by the model. Adapted for a speech, and
