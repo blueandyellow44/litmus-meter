@@ -257,6 +257,11 @@ describe("style name", () => {
 });
 
 describe("tool schemas require every field (live test 2026-10-07)", () => {
+  it("the per-line reply has room for every required field (200 cut off appeal, 2026-10-11)", async () => {
+    const { MAX_OUTPUT_TOKENS } = await import("../server/score.ts");
+    expect(MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(400);
+  });
+
   it("the scorer and the verdict mark every property required, since Haiku skips optional ones", async () => {
     const { SCORE_TOOL, VERDICT_TOOL } = await import("../server/rubric.ts");
     for (const tool of [SCORE_TOOL, VERDICT_TOOL]) {

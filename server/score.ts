@@ -5,7 +5,11 @@ import type { AnthropicUsage } from "./prices.ts";
 export { validateMarks } from "./marks.ts";
 
 export const SCORER_MODEL = "claude-haiku-4-5";
-const MAX_OUTPUT_TOKENS = 200;
+// 200 cut the reply off before "appeal", the last field, on about 70% of
+// scored lines (measured 2026-10-11 on the recorded debates: stop_reason
+// max_tokens at 200, complete replies run 186-216 tokens). The verdict had the
+// same failure on 2026-10-07 (7b2d874).
+export const MAX_OUTPUT_TOKENS = 600;
 export const MAX_SENTENCE_CHARS = 1000;
 const MAX_REASON_CHARS = 240;
 

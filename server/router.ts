@@ -138,6 +138,9 @@ export async function handle(request: Request, env: Env, deps: Deps): Promise<Re
       deps.waitUntil(deps.ledger.charge(cost));
       const after = spendState(before + cost);
 
+      // A cut-off reply still validates (the late fields are simply missing),
+      // so say so: this is how "appeal" went missing unnoticed on 2026-10-07.
+      if (response.stop_reason === "max_tokens") deps.log({ event: "score_truncated", text, output_tokens: response.usage?.output_tokens ?? null });
       const valid = validateToolOutput(response);
       if (!valid) {
         deps.log({ event: "malformed_score_dropped", text, output: response.content ?? null });
